@@ -1,0 +1,10 @@
+{
+  "updated_at": "2026-11-02T10:00:00Z",
+  "status": "clear",
+  "summary": {
+    "total_threats": 0,
+    "drone_count": 0,
+    "rocket_count": 0
+  },
+  "incidents": []
+}

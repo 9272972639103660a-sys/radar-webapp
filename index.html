@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>РАДАР // Мониторинг воздушных угроз</title>
+  
+  <!-- Telegram WebApp SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Top HUD Bar -->
+    <header class="hud-header">
+      <div class="hud-brand">
+        <div class="radar-logo-pulse"></div>
+        <div class="hud-title-box">
+          <span class="hud-sys-label">СИСТЕМА РАННЕГО ПРЕДУПРЕЖДЕНИЯ</span>
+          <h1 class="hud-title">РАДАР <span>ВКО РФ</span></h1>
+        </div>
+      </div>
+      
+      <div class="hud-status-badge" id="overallStatusBadge">
+        <span class="pulse-indicator status-green"></span>
+        <span class="badge-text" id="overallStatusText">НЕБО ЧИСТО</span>
+      </div>
+    </header>
+
+    <!-- Map Container -->
+    <div id="map"></div>
+
+    <!-- Radar Sweep Animation Overlay (Subtle) -->
+    <div class="radar-sweep-overlay" id="radarSweep"></div>
+
+    <!-- Floating HUD Telemetry Pill -->
+    <div class="hud-telemetry-pill">
+      <div class="telemetry-item">
+        <span class="telem-label">ИСТОЧНИКИ:</span>
+        <span class="telem-val" id="sourcesCount">23 АКТИВНЫ</span>
+      </div>
+      <div class="telemetry-separator">|</div>
+      <div class="telemetry-item">
+        <span class="telem-label">ВРЕМЯ:</span>
+        <span class="telem-val" id="timeClock">--:--:-- MSK</span>
+      </div>
+      <div class="telemetry-separator">|</div>
+      <button class="sound-toggle-btn" id="soundToggle" title="Звуковой маяк">
+        <span id="soundIcon">🔇</span>
+      </button>
+    </div>
+
+    <!-- Bottom Tactical Control Shelf -->
+    <div class="bottom-shelf" id="bottomShelf">
+      <div class="shelf-handle" id="shelfHandle"></div>
+      
+      <!-- Quick Region Chips Carousel -->
+      <div class="region-chips-container">
+        <button class="chip active" data-region="all">🇷🇺 Вся Россия</button>
+        <button class="chip" data-region="Москва">Москва</button>
+        <button class="chip" data-region="Белгородская область">Белгород</button>
+        <button class="chip" data-region="Курская область">Курск</button>
+        <button class="chip" data-region="Брянская область">Брянск</button>
+        <button class="chip" data-region="Воронежская область">Воронеж</button>
+        <button class="chip" data-region="Ростовская область">Ростов</button>
+        <button class="chip" data-region="Краснодарский край">Краснодар</button>
+        <button class="chip" data-region="Республика Крым">Крым</button>
+        <button class="chip" data-region="Саратовская область">Саратов</button>
+        <button class="chip" data-region="Башкортостан">Уфа / Башкирия</button>
+      </div>
+
+      <!-- Feed / Details Card View -->
+      <div class="incident-card" id="activeIncidentCard">
+        <div class="card-header">
+          <div class="card-status-dot status-green" id="cardStatusDot"></div>
+          <div class="card-titles">
+            <h3 class="card-headline" id="cardHeadline">ОПЕРАТИВНАЯ ОБСТАНОВКА СПОКОЙНАЯ</h3>
+            <span class="card-sub" id="cardSub">ПРЯМОЙ МОНИТОРИНГ ЭФИРА И МЧС</span>
+          </div>
+          <button class="card-refresh-btn" id="refreshBtn" title="Обновить">
+            <span class="refresh-icon">🔄</span>
+          </button>
+        </div>
+
+        <div class="card-body" id="cardBody">
+          В выбранном секторе активных предупреждений об атаках беспилотных летательных аппаратов (БПЛА) и ракетной опасности не зафиксировано.
+        </div>
+
+        <div class="card-footer">
+          <div class="card-timer">
+            <span class="timer-icon">🕒</span>
+            <span id="cardLastUpdate">Обновлено: только что</span>
+          </div>
+          <div class="card-badge" id="cardThreatCount">УГРОЗ: 0</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
