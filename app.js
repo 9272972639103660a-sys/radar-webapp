@@ -163,14 +163,27 @@ async function fetchRadarData() {
     tg.HapticFeedback.impactOccurred('light');
   }
 
+  const fallbackUrl = 'https://raw.githubusercontent.com/9272972639103660a-sys/radar-webapp/main/data.json';
+
   try {
-    const res = await fetch(`data.json?_t=${Date.now()}`);
-    if (!res.ok) throw new Error("Нет файла data.json");
+    let res = null;
+    if (window.location.protocol === 'file:') {
+      res = await fetch(`${fallbackUrl}?_t=${Date.now()}`);
+    } else {
+      try {
+        res = await fetch(`data.json?_t=${Date.now()}`);
+        if (!res.ok) throw new Error("Local data not ok");
+      } catch (localErr) {
+        res = await fetch(`${fallbackUrl}?_t=${Date.now()}`);
+      }
+    }
+
+    if (!res || !res.ok) throw new Error("Не удалось загрузить данные радара");
     const data = await res.json();
     latestData = data;
     renderData(data);
   } catch (err) {
-    console.log("data.json пока не создан или пуст, отображаем статус спокойствия.");
+    console.log("Данные радара недоступны, отображаем дефолтное состояние:", err);
     renderEmptyState();
   } finally {
     setTimeout(() => {
