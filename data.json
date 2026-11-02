@@ -1,16 +1,16 @@
 {
-  "updated_at": "2026-11-02T16:46:41.862870+00:00",
-  "status": "clear",
+  "updated_at": "2026-11-02T16:48:05.113735+00:00",
+  "status": "alert",
   "summary": {
-    "total_threats": 0,
+    "total_threats": 1,
     "drone_count": 0,
-    "rocket_count": 0
+    "rocket_count": 1
   },
   "incidents": [
     {
       "id": "0cade40225898e8d695494e64fd9c6a835d8c4aefec040ae561f7d8a9d97af32",
       "kind": "rocket",
-      "active": false,
+      "active": true,
       "region": "Краснодарский край",
       "city": "Красноярский край",
       "time": "02.11.2026 17:36",
