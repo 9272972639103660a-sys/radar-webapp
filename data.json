@@ -1,12 +1,22 @@
 {
-  "updated_at": "2026-11-02T18:52:52.446859+00:00",
+  "updated_at": "2026-11-02T18:54:14.032295+00:00",
   "status": "alert",
   "summary": {
-    "total_threats": 3,
-    "drone_count": 3,
+    "total_threats": 4,
+    "drone_count": 4,
     "rocket_count": 0
   },
   "incidents": [
+    {
+      "id": "4cf6ea2222f28dd0101aacfa8cd8d997ab1fc8e4f5a82fa5ff447944ae9e27f6",
+      "kind": "drone",
+      "active": true,
+      "region": "Московский",
+      "city": "Московская область",
+      "time": "02.11.2026 21:52",
+      "timestamp": "2026-11-02T18:52:48+00:00",
+      "text": "Московская область Опасность по БПЛА ❗️"
+    },
     {
       "id": "eb0819fe6ac7920be27cd8bcde35ca398db864527406e822cf7aa5c0d0f6e0d8",
       "kind": "drone",
