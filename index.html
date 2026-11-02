@@ -878,10 +878,11 @@
       font-size: 13px;
       line-height: 1.46;
       color: var(--text-secondary);
-      max-height: 62px;
+      max-height: 110px;
       overflow-y: auto;
       user-select: text;
       -webkit-user-select: text;
+      scrollbar-width: thin;
     }
 
     /* Кастомные инлайн-иконки внутри текста сводки */
@@ -2432,11 +2433,11 @@ window.__EMBEDDED_INITIAL_DATA__ = {
         currentMarkers = [];
 
         const incidents = data.incidents || [];
-        const activeIncidents = incidents.filter((i) => i.kind !== 'clear');
-        const threatCount = activeIncidents.length;
+        const activeThreats = incidents.filter((i) => i.kind !== 'clear' && i.active !== false);
+        const threatCount = (data.summary && typeof data.summary.total_threats === 'number') ? data.summary.total_threats : activeThreats.length;
 
-        const droneCount = activeIncidents.filter((i) => i.kind === 'drone').length;
-        const rocketCount = activeIncidents.filter((i) => i.kind === 'rocket').length;
+        const droneCount = (data.summary && typeof data.summary.drone_count === 'number') ? data.summary.drone_count : activeThreats.filter((i) => i.kind === 'drone').length;
+        const rocketCount = (data.summary && typeof data.summary.rocket_count === 'number') ? data.summary.rocket_count : activeThreats.filter((i) => i.kind === 'rocket').length;
 
         const statDroneEl = document.getElementById('statDroneCount');
         const statRocketEl = document.getElementById('statRocketCount');
@@ -2444,12 +2445,12 @@ window.__EMBEDDED_INITIAL_DATA__ = {
 
         if (statDroneEl) statDroneEl.textContent = String(droneCount);
         if (statRocketEl) statRocketEl.textContent = String(rocketCount);
-        if (openFeedLabel) openFeedLabel.textContent = `Журнал (${threatCount})`;
+        if (openFeedLabel) openFeedLabel.textContent = `Журнал (${incidents.length})`;
 
-        // Группируем события по координатам, чтобы пины не перекрывали друг друга
+        // Группируем активные события по координатам, чтобы пины не перекрывали друг друга
         const groupedByLocation = new Map();
 
-        activeIncidents.forEach((inc) => {
+        activeThreats.forEach((inc) => {
           let coords = inc.coords || resolveCoords(inc.city) || resolveCoords(inc.region) || resolveCoords(inc.location);
           if (coords) {
             const key = `${coords[0].toFixed(2)}_${coords[1].toFixed(2)}`;
@@ -2496,10 +2497,30 @@ window.__EMBEDDED_INITIAL_DATA__ = {
           currentMarkers.push(marker);
         });
 
-        if (threatCount > 0) {
-          showIncidentDetails(activeIncidents[0]);
+        const activeChip = document.querySelector('.chip.active');
+        const activeReg = activeChip ? activeChip.getAttribute('data-region') : 'all';
+
+        if (activeReg && activeReg !== 'all') {
+          const regLower = activeReg.toLowerCase();
+          const found = incidents.find(
+            (i) =>
+              i.kind !== 'clear' &&
+              ((i.region && i.region.toLowerCase().includes(regLower)) ||
+               (i.city && i.city.toLowerCase().includes(regLower)))
+          );
+          if (found) {
+            showIncidentDetails(found);
+          } else {
+            renderRegionClearState(activeReg);
+          }
         } else {
-          renderEmptyState();
+          if (activeThreats.length > 0) {
+            showIncidentDetails(activeThreats[0]);
+          } else if (incidents.length > 0 && incidents[0].kind !== 'clear') {
+            showIncidentDetails(incidents[0]);
+          } else {
+            renderEmptyState();
+          }
         }
 
         renderFilteredFeedList();
@@ -2543,8 +2564,16 @@ window.__EMBEDDED_INITIAL_DATA__ = {
         const threatBadge = document.getElementById('cardThreatCount');
 
         const isRocket = inc.kind === 'rocket';
-        if (card) card.className = 'incident-card danger js-glare-target';
-        if (dot) dot.className = isRocket ? 'card-status-dot status-red' : 'card-status-dot status-amber';
+        const isLive = inc.active !== false;
+
+        if (card) card.className = isLive ? 'incident-card danger js-glare-target' : 'incident-card js-glare-target';
+        if (dot) {
+          if (!isLive) {
+            dot.className = 'card-status-dot status-amber';
+          } else {
+            dot.className = isRocket ? 'card-status-dot status-red' : 'card-status-dot status-amber';
+          }
+        }
         if (typeSvg) {
           typeSvg.innerHTML = `<use href="${isRocket ? '#custom-icon-rocket' : '#custom-icon-drone'}"></use>`;
         }
@@ -2558,7 +2587,9 @@ window.__EMBEDDED_INITIAL_DATA__ = {
         const titleKind = kindNames[inc.kind] || 'Внимание: угроза';
         const loc = (inc.city || inc.region || 'Регион').replace(/[\u{1F300}-\u{1FAFF}]/gu, '');
         if (headline) headline.textContent = `${titleKind} · ${loc}`;
-        if (sub) sub.textContent = `Зафиксировано: ${inc.time || 'оперативно'}`;
+
+        const statusNote = !isLive ? ' (в архиве / завершено)' : '';
+        if (sub) sub.textContent = `Зафиксировано: ${inc.time || 'оперативно'}${statusNote}`;
         if (body) {
           body.innerHTML = sanitizeAndFormatText(
             inc.text || 'Зафиксировано движение воздушных целей. Средства ПВО находятся в готовности.'
@@ -2566,8 +2597,13 @@ window.__EMBEDDED_INITIAL_DATA__ = {
         }
 
         if (threatBadge) {
-          threatBadge.textContent = sectorCount > 1 ? `СВОДОК В СЕКТОРЕ: ${sectorCount}` : 'АКТИВНО';
-          threatBadge.style.color = isRocket ? 'var(--status-danger)' : 'var(--status-amber)';
+          if (!isLive) {
+            threatBadge.textContent = 'В АРХИВЕ';
+            threatBadge.style.color = 'var(--text-tertiary)';
+          } else {
+            threatBadge.textContent = sectorCount > 1 ? `СВОДОК В СЕКТОРЕ: ${sectorCount}` : 'АКТИВНО';
+            threatBadge.style.color = isRocket ? 'var(--status-danger)' : 'var(--status-amber)';
+          }
         }
       }
 
@@ -2778,12 +2814,15 @@ window.__EMBEDDED_INITIAL_DATA__ = {
           if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
 
           const reg = chip.getAttribute('data-region');
+          const incidents = latestData?.incidents || [];
+          const activeThreats = incidents.filter((i) => i.kind !== 'clear' && i.active !== false);
+
           if (reg === 'all') {
             map.flyTo([53.6, 42.2], 5, { duration: 1.1 });
-            const incidents = latestData?.incidents || [];
-            const activeIncidents = incidents.filter((i) => i.kind !== 'clear');
-            if (activeIncidents.length > 0) {
-              showIncidentDetails(activeIncidents[0]);
+            if (activeThreats.length > 0) {
+              showIncidentDetails(activeThreats[0]);
+            } else if (incidents.length > 0 && incidents[0].kind !== 'clear') {
+              showIncidentDetails(incidents[0]);
             } else {
               renderEmptyState();
             }
@@ -2792,14 +2831,12 @@ window.__EMBEDDED_INITIAL_DATA__ = {
             if (coords) {
               map.flyTo(coords, 7, { duration: 1.1 });
             }
-            const incidents = latestData?.incidents || [];
             const regLower = reg.toLowerCase();
             const found = incidents.find(
               (i) =>
                 i.kind !== 'clear' &&
                 ((i.region && i.region.toLowerCase().includes(regLower)) ||
-                 (i.city && i.city.toLowerCase().includes(regLower)) ||
-                 (i.text && i.text.toLowerCase().includes(regLower)))
+                 (i.city && i.city.toLowerCase().includes(regLower)))
             );
             if (found) {
               showIncidentDetails(found);
