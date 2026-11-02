@@ -1,12 +1,22 @@
 {
-  "updated_at": "2026-11-02T18:09:29.183428+00:00",
+  "updated_at": "2026-11-02T18:10:51.106018+00:00",
   "status": "alert",
   "summary": {
-    "total_threats": 1,
-    "drone_count": 1,
+    "total_threats": 2,
+    "drone_count": 2,
     "rocket_count": 0
   },
   "incidents": [
+    {
+      "id": "e9be95e1e1eb8938ca21f79181cc66f24a760f4cbaf27a67e6eb7e00492acfd3",
+      "kind": "drone",
+      "active": true,
+      "region": "Тверская область",
+      "city": "Тверская область",
+      "time": "02.11.2026 21:09",
+      "timestamp": "2026-11-02T18:09:21+00:00",
+      "text": "Тверская область Опасность по БПЛА ❗️"
+    },
     {
       "id": "a616567f1ab26af0a64212f5d7839acdc976eb17840933c54380cf085da892dd",
       "kind": "drone",
