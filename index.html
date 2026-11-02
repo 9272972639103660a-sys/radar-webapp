@@ -2,112 +2,2550 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0c0e">
   <title>РАДАР // Мониторинг воздушных угроз</title>
-  
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+
   <!-- Telegram WebApp SDK -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  
-  <!-- Leaflet CSS -->
+
+  <!-- Leaflet CSS (без API ключей) -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  
+
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="style.css">
+  <style>
+    :root {
+      /* YDS 2.1 Monochrome OLED Glass System */
+      --bg-oled: #0b0c0e;
+      --surface-glass: rgba(15, 16, 20, 0.84);
+      --surface-glass-heavy: rgba(12, 13, 16, 0.92);
+      --surface-card: rgba(255, 255, 255, 0.04);
+      --surface-card-hover: rgba(255, 255, 255, 0.075);
+      --surface-icon: rgba(255, 255, 255, 0.05);
+
+      --text-primary: #ffffff;
+      --text-secondary: rgba(255, 255, 255, 0.60);
+      --text-tertiary: rgba(255, 255, 255, 0.36);
+
+      --border-base: rgba(255, 255, 255, 0.12);
+      --border-top-accent: rgba(255, 255, 255, 0.20);
+      --border-seam-soft: rgba(255, 255, 255, 0.07);
+
+      /* YDS Status Accents (Lanyard-grade subtle tones) */
+      --status-online: #23a55a;
+      --status-online-text: #4cd964;
+      --status-online-bg: rgba(76, 217, 100, 0.12);
+      --status-online-border: rgba(76, 217, 100, 0.28);
+
+      --status-amber: #faa61a;
+      --status-amber-bg: rgba(250, 166, 26, 0.12);
+      --status-amber-border: rgba(250, 166, 26, 0.28);
+
+      --status-danger: #ed4245;
+      --status-danger-bg: rgba(237, 66, 69, 0.12);
+      --status-danger-border: rgba(237, 66, 69, 0.30);
+
+      --segment-outer: 22px;
+      --segment-inner: 5px;
+      --segment-gap: 1.5px;
+
+      --spring-easing: cubic-bezier(0.34, 1.56, 0.64, 1);
+      --smooth-out: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: var(--bg-oled);
+      color: var(--text-primary);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      font-size: 14px;
+    }
+
+    /* Subtle monochromatic top light falloff */
+    body::before {
+      content: "";
+      position: fixed;
+      top: -18%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100vw;
+      max-width: 480px;
+      height: 280px;
+      background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.04) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 500;
+    }
+
+    #app {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      transition:
+        transform 0.52s var(--smooth-out),
+        filter 0.52s var(--smooth-out),
+        opacity 0.42s ease;
+      will-change: transform, filter, opacity;
+    }
+
+    body.modal-open #app {
+      transform: scale(0.94) translateY(6px);
+      filter: blur(10px);
+      opacity: 0.42;
+      pointer-events: none;
+    }
+
+    /* =========================================================================
+       КАРТА БЕЗ API КЛЮЧЕЙ (OLED MONOLITH FILTER + BUILT-IN VECTOR)
+       ========================================================================= */
+    #map {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      background-color: var(--bg-oled);
+      z-index: 1;
+    }
+
+    /* Фильтр превращает бесплатные тайлы OSM в строгий монохромный OLED #0b0c0e */
+    .map-mode-oled .leaflet-tile-pane {
+      filter: invert(100%) hue-rotate(180deg) grayscale(92%) brightness(82%) contrast(108%);
+    }
+
+    .map-mode-light .leaflet-tile-pane {
+      filter: grayscale(95%) brightness(95%) contrast(105%);
+    }
+
+    .map-mode-satellite .leaflet-tile-pane {
+      filter: grayscale(35%) brightness(75%) contrast(115%);
+    }
+
+    .leaflet-control-attribution {
+      display: none !important;
+    }
+
+    /* Виньетка поверх карты для плавного слияния с OLED-интерфейсом */
+    .radar-sweep-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 200;
+      background:
+        radial-gradient(circle at 50% 45%, transparent 35%, rgba(11, 12, 14, 0.55) 100%),
+        linear-gradient(180deg, rgba(11, 12, 14, 0.75) 0%, transparent 18%, transparent 72%, rgba(11, 12, 14, 0.88) 100%);
+    }
+
+    /* =========================================================================
+       YDS 2.1 SPECULAR GLARE ENGINE (ДЛЯ ВСЕХ КАРТОЧЕК И КНОПОК)
+       ========================================================================= */
+    .js-glare-target {
+      --mouse-x: 50%;
+      --mouse-y: 50%;
+      --glare-opacity: 0;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .js-glare-target::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: radial-gradient(
+        circle 170px at var(--mouse-x) var(--mouse-y),
+        rgba(255, 255, 255, 0.13),
+        transparent 62%
+      );
+      opacity: var(--glare-opacity, 0);
+      transition: opacity 0.35s ease;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .js-glare-target::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      padding: 0.5px;
+      background: radial-gradient(
+        circle 125px at var(--mouse-x) var(--mouse-y),
+        rgba(255, 255, 255, 0.55),
+        transparent 62%
+      );
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      opacity: var(--glare-opacity, 0);
+      transition: opacity 0.35s ease;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* =========================================================================
+       ВЕРХНЯЯ ПАНЕЛЬ (HUD HEADER В СТИЛЕ YDS 2.1)
+       ========================================================================= */
+    .hud-header {
+      position: absolute;
+      top: max(12px, env(safe-area-inset-top));
+      left: 14px;
+      right: 14px;
+      z-index: 800;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      pointer-events: none;
+      animation: hubReveal 0.6s var(--smooth-out) both;
+    }
+
+    @keyframes hubReveal {
+      from {
+        opacity: 0;
+        transform: translateY(10px) scale(0.99);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .yds-top-bar {
+      pointer-events: auto;
+      width: 100%;
+      max-width: 460px;
+      padding: 12px 14px;
+      border-radius: var(--segment-outer);
+      background: var(--surface-glass);
+      backdrop-filter: blur(20px) saturate(140%);
+      -webkit-backdrop-filter: blur(20px) saturate(140%);
+      border: 0.5px solid var(--border-base);
+      border-top-color: var(--border-top-accent);
+      box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .hud-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      position: relative;
+      z-index: 2;
+    }
+
+    /* Avatar Plate-style Radar Well */
+    .radar-plate {
+      width: 42px;
+      height: 42px;
+      border-radius: 13px;
+      background: rgba(255, 255, 255, 0.045);
+      border: 0.5px solid var(--border-base);
+      border-top-color: var(--border-top-accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      color: var(--text-primary);
+      flex-shrink: 0;
+      box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.14);
+    }
+
+    .radar-sweep-line {
+      transform-origin: 12px 12px;
+      animation: radarRotate 4s linear infinite;
+    }
+
+    @keyframes radarRotate {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .hud-title-box {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .hud-sys-label {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+    }
+
+    .hud-title {
+      font-size: 17px;
+      font-weight: 600;
+      letter-spacing: -0.025em;
+      color: var(--text-primary);
+      line-height: 1.2;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .hud-title span {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      padding: 1px 6px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 0.5px solid rgba(255, 255, 255, 0.1);
+    }
+
+    /* Живой статус-пил (в стиле discord-live-pill из index.html) */
+    .hud-status-badge {
+      position: relative;
+      z-index: 2;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 5px 11px;
+      border-radius: 999px;
+      font-size: 11.5px;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+      background: rgba(255, 255, 255, 0.06);
+      border: 0.5px solid var(--border-base);
+      color: var(--text-secondary);
+      transition: all 0.28s var(--smooth-out);
+      flex-shrink: 0;
+    }
+
+    .hud-status-badge[data-state="safe"] {
+      color: var(--status-online-text);
+      background: var(--status-online-bg);
+      border-color: var(--status-online-border);
+    }
+
+    .hud-status-badge[data-state="alert"] {
+      color: var(--status-danger);
+      background: var(--status-danger-bg);
+      border-color: var(--status-danger-border);
+    }
+
+    .pulse-indicator {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .status-green {
+      background-color: var(--status-online);
+      box-shadow: 0 0 6px rgba(35, 165, 90, 0.65);
+    }
+
+    .status-red {
+      background-color: var(--status-danger);
+      box-shadow: 0 0 8px rgba(237, 66, 69, 0.75);
+      animation: statusPulse 1.1s infinite alternate;
+    }
+
+    .status-amber {
+      background-color: var(--status-amber);
+      box-shadow: 0 0 6px rgba(250, 166, 26, 0.65);
+    }
+
+    @keyframes statusPulse {
+      from { opacity: 0.45; transform: scale(0.88); }
+      to { opacity: 1; transform: scale(1.12); }
+    }
+
+    /* ТЕЛЕМЕТРИЯ ПОД ШАПКОЙ */
+    .hud-telemetry-pill {
+      pointer-events: auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      background: var(--surface-glass);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 0.5px solid var(--border-base);
+      border-top-color: var(--border-top-accent);
+      font-size: 11.5px;
+      color: var(--text-secondary);
+      font-variant-numeric: tabular-nums;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+    }
+
+    .telemetry-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .telem-label {
+      color: var(--text-tertiary);
+    }
+
+    .telem-val {
+      color: var(--text-primary);
+      font-weight: 500;
+    }
+
+    .telemetry-separator {
+      width: 1px;
+      height: 10px;
+      background: var(--border-base);
+    }
+
+    /* =========================================================================
+       ПРАВАЯ СТЕКЛЯННАЯ ПАНЕЛЬ ИНСТРУМЕНТОВ КАРТЫ (SEGMENTED STACK)
+       ========================================================================= */
+    .map-side-stack {
+      position: absolute;
+      right: 14px;
+      top: max(124px, calc(env(safe-area-inset-top) + 112px));
+      z-index: 800;
+      display: flex;
+      flex-direction: column;
+      gap: var(--segment-gap);
+      animation: hubReveal 0.7s var(--smooth-out) both;
+    }
+
+    .side-action-btn {
+      width: 44px;
+      height: 44px;
+      background: var(--surface-glass);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 0.5px solid var(--border-base);
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      outline: none;
+      transition:
+        transform 0.18s var(--spring-easing),
+        background-color 0.22s ease,
+        color 0.22s ease,
+        border-color 0.22s ease;
+    }
+
+    .side-action-btn svg {
+      position: relative;
+      z-index: 2;
+      width: 19px;
+      height: 19px;
+    }
+
+    .side-action-btn.seg-top {
+      border-radius: 16px 16px 4px 4px;
+      border-top-color: var(--border-top-accent);
+      border-bottom-color: var(--border-seam-soft);
+    }
+
+    .side-action-btn.seg-mid {
+      border-radius: 4px;
+      border-top-color: var(--border-seam-soft);
+      border-bottom-color: var(--border-seam-soft);
+    }
+
+    .side-action-btn.seg-bottom {
+      border-radius: 4px 4px 16px 16px;
+      border-top-color: var(--border-seam-soft);
+    }
+
+    .side-action-btn:hover {
+      background: rgba(28, 30, 36, 0.9);
+      color: var(--text-primary);
+    }
+
+    .side-action-btn:active {
+      transform: scale(0.92);
+    }
+
+    .side-action-btn.is-active {
+      color: var(--text-primary);
+      border-color: rgba(255, 255, 255, 0.28);
+    }
+
+    /* =========================================================================
+       НИЖНИЙ СЕГМЕНТИРОВАННЫЙ ХАБ (YDS 2.1 BOTTOM DOCK)
+       ========================================================================= */
+    .bottom-shelf {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 800;
+      width: 100%;
+      max-width: 460px;
+      margin: 0 auto;
+      padding: 0 14px max(14px, env(safe-area-inset-bottom)) 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+      animation: hubReveal 0.65s var(--smooth-out) both;
+    }
+
+    /* Горизонтальная лента чипов регионов (без эмодзи, с кастомными SVG) */
+    .region-chips-container {
+      pointer-events: auto;
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding: 2px 1px;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+
+    .region-chips-container::-webkit-scrollbar {
+      display: none;
+    }
+
+    .chip {
+      flex-shrink: 0;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 13px;
+      border-radius: 999px;
+      background: var(--surface-glass);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 0.5px solid var(--border-base);
+      border-top-color: var(--border-top-accent);
+      color: var(--text-secondary);
+      font-family: inherit;
+      font-size: 12.5px;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+      cursor: pointer;
+      outline: none;
+      transition:
+        transform 0.18s var(--spring-easing),
+        background-color 0.22s ease,
+        color 0.22s ease,
+        border-color 0.22s ease;
+    }
+
+    .chip svg {
+      width: 13px;
+      height: 13px;
+      opacity: 0.75;
+      flex-shrink: 0;
+    }
+
+    .chip:hover {
+      color: var(--text-primary);
+      background: rgba(26, 28, 34, 0.9);
+    }
+
+    .chip:active {
+      transform: scale(0.95);
+    }
+
+    .chip.active {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.32);
+      color: var(--text-primary);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    }
+
+    .chip.active svg {
+      opacity: 1;
+    }
+
+    /* СЕГМЕНТИРОВАННЫЙ СТЕК КАРТОЧЕК (1.5px physical gap) */
+    .yds-segmented-stack {
+      pointer-events: auto;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: var(--segment-gap);
+    }
+
+    /* Верхний сегмент стека: Сводка угроз и кнопка открытия полного журнала */
+    .stack-summary-segment {
+      width: 100%;
+      padding: 12px 16px;
+      border-radius: var(--segment-outer) var(--segment-outer) var(--segment-inner) var(--segment-inner);
+      background: var(--surface-glass-heavy);
+      backdrop-filter: blur(22px) saturate(140%);
+      -webkit-backdrop-filter: blur(22px) saturate(140%);
+      border: 0.5px solid var(--border-base);
+      border-top-color: var(--border-top-accent);
+      border-bottom-color: var(--border-seam-soft);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      cursor: pointer;
+      color: var(--text-primary);
+      font-family: inherit;
+      text-align: left;
+      transition:
+        transform 0.16s var(--spring-easing),
+        background-color 0.22s ease;
+    }
+
+    .stack-summary-segment:hover {
+      background: rgba(22, 24, 30, 0.95);
+    }
+
+    .stack-summary-segment:active {
+      transform: scale(0.985);
+    }
+
+    .summary-metrics {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .metric-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12.5px;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+
+    .metric-pill svg {
+      width: 15px;
+      height: 15px;
+      color: var(--text-primary);
+    }
+
+    .metric-val {
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+
+    .summary-action-right {
+      position: relative;
+      z-index: 2;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 0.5px solid rgba(255, 255, 255, 0.1);
+      transition: color 0.2s ease, border-color 0.2s ease, transform 0.2s var(--smooth-out);
+    }
+
+    .stack-summary-segment:hover .summary-action-right {
+      color: var(--text-primary);
+      border-color: rgba(255, 255, 255, 0.22);
+    }
+
+    /* Нижний сегмент стека: Активная карточка инцидента */
+    .incident-card {
+      width: 100%;
+      padding: 15px 16px 13px;
+      border-radius: var(--segment-inner) var(--segment-inner) var(--segment-outer) var(--segment-outer);
+      background: var(--surface-glass-heavy);
+      backdrop-filter: blur(22px) saturate(140%);
+      -webkit-backdrop-filter: blur(22px) saturate(140%);
+      border: 0.5px solid var(--border-base);
+      border-top-color: var(--border-seam-soft);
+      border-bottom-color: rgba(255, 255, 255, 0.15);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      transition: border-color 0.25s ease, background-color 0.25s ease;
+    }
+
+    .incident-card.danger {
+      border-bottom-color: rgba(237, 66, 69, 0.32);
+    }
+
+    .card-header {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .icon-well {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      background-color: var(--surface-icon);
+      border: 0.5px solid rgba(255, 255, 255, 0.10);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      color: var(--text-primary);
+      position: relative;
+    }
+
+    .card-status-dot {
+      position: absolute;
+      bottom: -2px;
+      right: -2px;
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      border: 2px solid #121316;
+    }
+
+    .card-titles {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .card-headline {
+      font-size: 14.5px;
+      font-weight: 600;
+      letter-spacing: -0.015em;
+      color: var(--text-primary);
+      line-height: 1.25;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .card-sub {
+      font-size: 12px;
+      font-weight: 400;
+      color: var(--text-secondary);
+      line-height: 1.25;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .card-refresh-btn {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 0.5px solid rgba(255, 255, 255, 0.1);
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: transform 0.3s var(--spring-easing), color 0.2s ease, background-color 0.2s ease;
+    }
+
+    .card-refresh-btn:hover {
+      color: var(--text-primary);
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .card-refresh-btn:active {
+      transform: scale(0.9) rotate(180deg);
+    }
+
+    .card-body {
+      position: relative;
+      z-index: 2;
+      font-size: 13px;
+      line-height: 1.46;
+      color: var(--text-secondary);
+      max-height: 62px;
+      overflow-y: auto;
+      user-select: text;
+      -webkit-user-select: text;
+    }
+
+    /* Кастомные инлайн-иконки внутри текста сводки */
+    .inline-svg-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      vertical-align: -2px;
+      width: 13px;
+      height: 13px;
+      margin: 0 2px;
+      color: var(--text-primary);
+    }
+
+    .card-footer {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 9px;
+      border-top: 0.5px solid var(--border-seam-soft);
+      font-size: 11.5px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .card-timer {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-tertiary);
+    }
+
+    .card-timer svg {
+      width: 13px;
+      height: 13px;
+      color: var(--text-secondary);
+    }
+
+    .card-badge {
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 10.5px;
+      font-weight: 500;
+      background: rgba(255, 255, 255, 0.06);
+      border: 0.5px solid rgba(255, 255, 255, 0.12);
+      color: var(--text-secondary);
+    }
+
+    /* =========================================================================
+       КАСТОМНЫЕ МАРКЕРЫ НА КАРТЕ (YDS 2.1 GLASS SQUIRCLE PINS)
+       ========================================================================= */
+    
+    /* Fix: Reset Leaflet default divIcon white background and border */
+    .custom-beacon,
+    .leaflet-div-icon {
+      background: transparent !important;
+      border: none !important;
+    }
+
+    /* Fix: Beacon ring color for amber / drone targets */
+    .beacon-ring.amber {
+      border-color: rgba(250, 166, 26, 0.55);
+    }
+
+    .custom-beacon {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .yds-pin-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .beacon-core {
+      width: 30px;
+      height: 30px;
+      border-radius: 10px;
+      background: #141519;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      box-shadow:
+        0 6px 18px rgba(0, 0, 0, 0.75),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 3;
+      color: #ffffff;
+      position: relative;
+      transition: transform 0.22s var(--spring-easing);
+    }
+
+    .custom-beacon:hover .beacon-core {
+      transform: scale(1.14);
+    }
+
+    .beacon-core.red {
+      border-color: rgba(237, 66, 69, 0.75);
+      color: var(--status-danger);
+    }
+
+    .beacon-core.amber {
+      border-color: rgba(250, 166, 26, 0.75);
+      color: var(--status-amber);
+    }
+
+    .beacon-core svg {
+      width: 15px;
+      height: 15px;
+    }
+
+    .pin-counter-badge {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      min-width: 16px;
+      height: 16px;
+      padding: 0 4px;
+      border-radius: 999px;
+      background: var(--status-danger);
+      color: #ffffff;
+      font-size: 9.5px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1.5px solid #0b0c0e;
+      z-index: 4;
+    }
+
+    .beacon-ring {
+      position: absolute;
+      width: 52px;
+      height: 52px;
+      border-radius: 16px;
+      border: 1px solid rgba(237, 66, 69, 0.55);
+      opacity: 0.75;
+      animation: ydsBeaconPulse 2.3s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+      pointer-events: none;
+    }
+
+    .beacon-ring.delay {
+      animation-delay: 1.15s;
+    }
+
+    @keyframes ydsBeaconPulse {
+      0% { transform: scale(0.55); opacity: 0.9; }
+      100% { transform: scale(1.65); opacity: 0; }
+    }
+
+    .beacon-label {
+      position: absolute;
+      top: 34px;
+      white-space: nowrap;
+      font-size: 10.5px;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+      padding: 2.5px 8px;
+      border-radius: 7px;
+      background: rgba(15, 16, 20, 0.92);
+      border: 0.5px solid rgba(255, 255, 255, 0.16);
+      color: var(--text-primary);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+      z-index: 4;
+    }
+
+    /* =========================================================================
+       3D GLASS MODAL СПИСКА ВСЕХ СВОДОК (КАК QR MODAL В INDEX.HTML)
+       ========================================================================= */
+    .feed-modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 1100;
+      background: rgba(5, 6, 8, 0.74);
+      backdrop-filter: blur(22px) saturate(140%);
+      -webkit-backdrop-filter: blur(22px) saturate(140%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      perspective: 1100px;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition:
+        opacity 0.38s var(--smooth-out),
+        visibility 0.38s linear;
+    }
+
+    .feed-modal-backdrop.is-open {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+    }
+
+    .feed-modal-card {
+      width: 100%;
+      max-width: 440px;
+      max-height: 82vh;
+      border-radius: 28px;
+      background: linear-gradient(165deg, rgba(28, 30, 36, 0.95) 0%, rgba(14, 15, 19, 0.98) 100%);
+      border: 0.5px solid rgba(255, 255, 255, 0.14);
+      border-top-color: rgba(255, 255, 255, 0.28);
+      box-shadow:
+        0 32px 80px -12px rgba(0, 0, 0, 0.88),
+        0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+        0 1px 0 0 rgba(255, 255, 255, 0.2) inset;
+      padding: 22px 18px 18px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+      transform-origin: 50% 42%;
+      transform: translate3d(0, 28px, -60px) scale(0.86) rotateX(10deg);
+      opacity: 0;
+      filter: blur(8px);
+      transition:
+        transform 0.54s cubic-bezier(0.22, 1.35, 0.36, 1),
+        opacity 0.32s var(--smooth-out),
+        filter 0.42s var(--smooth-out);
+    }
+
+    .feed-modal-backdrop.is-open .feed-modal-card {
+      transform: translate3d(0, 0, 0) scale(1) rotateX(0deg);
+      opacity: 1;
+      filter: blur(0px);
+    }
+
+    .modal-top-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+      padding: 0 4px;
+    }
+
+    .modal-title-group {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .modal-title {
+      font-size: 17px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: var(--text-primary);
+    }
+
+    .modal-subtitle {
+      font-size: 12.5px;
+      color: var(--text-secondary);
+    }
+
+    .modal-close-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.06);
+      border: 0.5px solid rgba(255, 255, 255, 0.12);
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s var(--spring-easing);
+    }
+
+    .modal-close-btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+      color: var(--text-primary);
+      transform: scale(1.06);
+    }
+
+    .modal-close-btn:active {
+      transform: scale(0.92);
+    }
+
+    .feed-scroll-list {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding-right: 2px;
+    }
+
+    .feed-segment-item {
+      padding: 13px 14px;
+      border-radius: 14px;
+      background: var(--surface-card);
+      border: 0.5px solid var(--border-base);
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      cursor: pointer;
+      transition: background-color 0.2s ease, transform 0.16s var(--spring-easing), border-color 0.2s ease;
+    }
+
+    .feed-segment-item:hover {
+      background: var(--surface-card-hover);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .feed-segment-item:active {
+      transform: scale(0.98);
+    }
+
+    .feed-item-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: var(--surface-icon);
+      border: 0.5px solid rgba(255, 255, 255, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      color: var(--text-primary);
+      margin-top: 1px;
+    }
+
+    .feed-item-icon.rocket-tone {
+      color: var(--status-danger);
+      border-color: rgba(237, 66, 69, 0.3);
+      background: rgba(237, 66, 69, 0.1);
+    }
+
+    .feed-item-icon.drone-tone {
+      color: var(--status-amber);
+      border-color: rgba(250, 166, 26, 0.28);
+      background: rgba(250, 166, 26, 0.08);
+    }
+
+    .feed-item-content {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .feed-item-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .feed-item-region {
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--text-primary);
+      letter-spacing: -0.01em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .feed-item-time {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      font-variant-numeric: tabular-nums;
+      flex-shrink: 0;
+    }
+
+    .feed-item-desc {
+      font-size: 12.5px;
+      line-height: 1.4;
+      color: var(--text-secondary);
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    /* =========================================================================
+       YDS 2.1 GLASS TOAST NOTIFICATION (ТОЧНО КАК В INDEX.HTML)
+       ========================================================================= */
+    .toast-viewport {
+      position: fixed;
+      top: max(118px, calc(env(safe-area-inset-top) + 106px));
+      left: 50%;
+      transform: translate3d(-50%, -14px, 0) scale(0.94);
+      opacity: 0;
+      pointer-events: none;
+      z-index: 1200;
+      transition:
+        transform 0.34s var(--spring-easing),
+        opacity 0.24s ease;
+      will-change: transform, opacity;
+      max-width: calc(100vw - 32px);
+    }
+
+    .toast-viewport.is-visible {
+      transform: translate3d(-50%, 0, 0) scale(1);
+      opacity: 1;
+    }
+
+    .glass-toast {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 15px;
+      border-radius: 999px;
+      background: rgba(22, 23, 27, 0.88);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 0.5px solid rgba(255, 255, 255, 0.16);
+      border-top-color: rgba(255, 255, 255, 0.26);
+      color: var(--text-primary);
+      font-size: 12.5px;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+      white-space: nowrap;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.65);
+    }
+
+    .toast-badge {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.12);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+  </style>
 </head>
 <body>
+  <!-- Скрытый спрайт кастомных векторных иконок (0% эмодзи) -->
+  <svg width="0" height="0" style="position:absolute; width:0; height:0; overflow:hidden;" aria-hidden="true">
+    <defs>
+      <!-- Кастомный вектор БПЛА (Крыло / Беспилотник) -->
+      <symbol id="custom-icon-drone" viewBox="0 0 24 24">
+        <path d="M12 2.5L4 17.5L9.5 15.5L12 21L14.5 15.5L20 17.5L12 2.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+        <path d="M12 2.5V15.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+      </symbol>
+
+      <!-- Кастомный вектор Ракеты -->
+      <symbol id="custom-icon-rocket" viewBox="0 0 24 24">
+        <path d="M14.5 4.5C16.8 3.2 19.5 3 20.5 3.5C21 4.5 20.8 7.2 19.5 9.5L13 16L8 11L14.5 4.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+        <path d="M8 11L4.5 12.5L3.5 15.5L8.5 15.5L8.5 20.5L11.5 19.5L13 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="15.5" cy="8.5" r="1.3" fill="currentColor"/>
+      </symbol>
+
+      <!-- Кастомный вектор Сетки/Локации -->
+      <symbol id="custom-icon-globe" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/>
+        <ellipse cx="12" cy="12" rx="4.2" ry="9" fill="none" stroke="currentColor" stroke-width="1.5"/>
+        <line x1="3.5" y1="9" x2="20.5" y2="9" stroke="currentColor" stroke-width="1.4"/>
+        <line x1="3.5" y1="15" x2="20.5" y2="15" stroke="currentColor" stroke-width="1.4"/>
+      </symbol>
+
+      <!-- Кастомный вектор Прицела/Сектора -->
+      <symbol id="custom-icon-target" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/>
+        <circle cx="12" cy="12" r="2" fill="currentColor"/>
+        <path d="M12 2V5M12 19V22M2 12H5M19 12H22" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      </symbol>
+
+      <!-- Кастомный вектор Молнии/Оперативной сводки -->
+      <symbol id="custom-icon-bolt" viewBox="0 0 24 24">
+        <path d="M13 2L4.5 13.5H11.5L10.5 22L19.5 10.5H12.5L13 2Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+      </symbol>
+
+      <!-- Кастомный вектор Тревоги -->
+      <symbol id="custom-icon-alert" viewBox="0 0 24 24">
+        <path d="M12 3.2L2.6 19.5C2.1 20.3 2.7 21.3 3.6 21.3H20.4C21.3 21.3 21.9 20.3 21.4 19.5L12 3.2Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+        <line x1="12" y1="9.5" x2="12" y2="14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="12" cy="17.3" r="1.1" fill="currentColor"/>
+      </symbol>
+
+      <!-- Кастомный вектор Щита ПВО / Чистого неба -->
+      <symbol id="custom-icon-shield" viewBox="0 0 24 24">
+        <path d="M12 2.8L4.5 6V11.5C4.5 16.5 7.7 20.8 12 22.2C16.3 20.8 19.5 16.5 19.5 11.5V6L12 2.8Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+        <polyline points="8.8 12.3 11.1 14.6 15.5 9.8" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+      </symbol>
+    </defs>
+  </svg>
+
   <div id="app">
-    <!-- Top HUD Bar -->
+    <!-- ВЕРХНИЙ БАР YDS 2.1 -->
     <header class="hud-header">
-      <div class="hud-brand">
-        <div class="radar-logo-pulse"></div>
-        <div class="hud-title-box">
-          <span class="hud-sys-label">СИСТЕМА РАННЕГО ПРЕДУПРЕЖДЕНИЯ</span>
-          <h1 class="hud-title">РАДАР <span>ВКО РФ</span></h1>
+      <div class="yds-top-bar js-glare-target">
+        <div class="hud-brand">
+          <div class="radar-plate" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity="0.28" stroke-width="1.5"/>
+              <circle cx="12" cy="12" r="5" stroke="currentColor" stroke-opacity="0.45" stroke-width="1.4" stroke-dasharray="3 2"/>
+              <g class="radar-sweep-line">
+                <line x1="12" y1="12" x2="18.2" y2="5.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              </g>
+              <circle cx="12" cy="12" r="2" fill="currentColor"/>
+            </svg>
+          </div>
+          <div class="hud-title-box">
+            <span class="hud-sys-label">Мониторинг воздушной обстановки</span>
+            <h1 class="hud-title">РАДАР <span>ВКО</span></h1>
+          </div>
+        </div>
+
+        <div class="hud-status-badge" id="overallStatusBadge" data-state="safe">
+          <span class="pulse-indicator status-green"></span>
+          <span class="badge-text" id="overallStatusText">Спокойно</span>
         </div>
       </div>
-      
-      <div class="hud-status-badge" id="overallStatusBadge">
-        <span class="pulse-indicator status-green"></span>
-        <span class="badge-text" id="overallStatusText">НЕБО ЧИСТО</span>
+
+      <!-- Капсула телеметрии -->
+      <div class="hud-telemetry-pill">
+        <div class="telemetry-item">
+          <span class="telem-label">Узлы:</span>
+          <span class="telem-val" id="sourcesCount">23 в сети</span>
+        </div>
+        <div class="telemetry-separator"></div>
+        <div class="telemetry-item">
+          <span class="telem-label">МСК</span>
+          <span class="telem-val" id="timeClock">--:--:--</span>
+        </div>
+        <div class="telemetry-separator"></div>
+        <div class="telemetry-item">
+          <span class="telem-val" id="mapLayerName">OLED Монолит</span>
+        </div>
       </div>
     </header>
 
-    <!-- Map Container -->
-    <div id="map"></div>
+    <!-- КАРТА БЕЗ API КЛЮЧЕЙ -->
+    <div id="map" class="map-mode-oled"></div>
 
-    <!-- Radar Sweep Animation Overlay (Subtle) -->
+    <!-- OLED Виньетка -->
     <div class="radar-sweep-overlay" id="radarSweep"></div>
 
-    <!-- Floating HUD Telemetry Pill -->
-    <div class="hud-telemetry-pill">
-      <div class="telemetry-item">
-        <span class="telem-label">ИСТОЧНИКИ:</span>
-        <span class="telem-val" id="sourcesCount">23 АКТИВНЫ</span>
-      </div>
-      <div class="telemetry-separator">|</div>
-      <div class="telemetry-item">
-        <span class="telem-label">ВРЕМЯ:</span>
-        <span class="telem-val" id="timeClock">--:--:-- MSK</span>
-      </div>
-      <div class="telemetry-separator">|</div>
-      <button class="sound-toggle-btn" id="soundToggle" title="Звуковой маяк">
-        <span id="soundIcon">🔇</span>
+    <!-- БОКОВОЙ СЕГМЕНТИРОВАННЫЙ СТЕК УПРАВЛЕНИЯ КАРТОЙ -->
+    <div class="map-side-stack">
+      <button type="button" class="side-action-btn seg-top js-glare-target" id="layerSwitchBtn" title="Сменить проекцию карты" aria-label="Сменить проекцию карты">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="12 2.5 2.5 7.5 12 12.5 21.5 7.5 12 2.5"></polygon>
+          <polyline points="2.5 12.5 12 17.5 21.5 12.5"></polyline>
+          <polyline points="2.5 17 12 22 21.5 17"></polyline>
+        </svg>
+      </button>
+
+      <button type="button" class="side-action-btn seg-mid js-glare-target" id="resetViewBtn" title="Центрировать обзор" aria-label="Центрировать обзор">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="3 11 21 3 13 21 11 13 3 11"></polygon>
+        </svg>
+      </button>
+
+      <button type="button" class="side-action-btn seg-bottom js-glare-target" id="soundToggle" title="Звуковой маяк" aria-label="Переключить звуковой маяк">
+        <!-- Кастомная SVG иконка звука (переключается скриптом без эмодзи) -->
+        <span id="soundIcon" style="display:flex; align-items:center; justify-content:center;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <line x1="22" y1="9" x2="16" y2="15"></line>
+            <line x1="16" y1="9" x2="22" y2="15"></line>
+          </svg>
+        </span>
       </button>
     </div>
 
-    <!-- Bottom Tactical Control Shelf -->
+    <!-- НИЖНИЙ СЕГМЕНТИРОВАННЫЙ ХАБ YDS 2.1 -->
     <div class="bottom-shelf" id="bottomShelf">
-      <div class="shelf-handle" id="shelfHandle"></div>
-      
-      <!-- Quick Region Chips Carousel -->
+      <!-- Чипы быстрого перехода по секторам (с кастомными SVG вместо эмодзи) -->
       <div class="region-chips-container">
-        <button class="chip active" data-region="all">🇷🇺 Вся Россия</button>
-        <button class="chip" data-region="Москва">Москва</button>
-        <button class="chip" data-region="Белгородская область">Белгород</button>
-        <button class="chip" data-region="Курская область">Курск</button>
-        <button class="chip" data-region="Брянская область">Брянск</button>
-        <button class="chip" data-region="Воронежская область">Воронеж</button>
-        <button class="chip" data-region="Ростовская область">Ростов</button>
-        <button class="chip" data-region="Краснодарский край">Краснодар</button>
-        <button class="chip" data-region="Республика Крым">Крым</button>
-        <button class="chip" data-region="Саратовская область">Саратов</button>
-        <button class="chip" data-region="Башкортостан">Уфа / Башкирия</button>
+        <button type="button" class="chip active js-glare-target" data-region="all">
+          <svg><use href="#custom-icon-globe"></use></svg>
+          <span>Вся Россия</span>
+        </button>
+        <button type="button" class="chip js-glare-target" data-region="Республика Татарстан">
+          <svg><use href="#custom-icon-target"></use></svg>
+          <span>Татарстан</span>
+        </button>
+        <button type="button" class="chip js-glare-target" data-region="Москва">
+          <svg><use href="#custom-icon-target"></use></svg>
+          <span>Москва</span>
+        </button>
+        <button type="button" class="chip js-glare-target" data-region="Белгородская область">
+          <svg><use href="#custom-icon-target"></use></svg>
+          <span>Белгород</span>
+        </button>
+        <button type="button" class="chip js-glare-target" data-region="Курская область">
+          <svg><use href="#custom-icon-target"></use></svg>
+          <span>Курск</span>
+        </button>
+        <button type="button" class="chip js-glare-target" data-region="Брянская область">
+          <svg><use href="#custom-icon-target"></use></svg>
+          <span>Брянск</span>
+        </button>
+        <button type="button" class="chip js-glare-target" data-region="Орловская область">
+          <svg><use href="#custom-icon-target"></use></svg>
+          <span>Орёл</span>
+        </button>
+        <button type="button" class="chip js-glare-target" data-region="Воронежская область">
+          <svg><use href="#custom-icon-target"></use></svg>
+          <span>Воронеж</span>
+        </button>
+        <button type="button" class="chip js-glare-target" data-region="Ростовская область">
+          <svg><use href="#custom-icon-target"></use></svg>
+          <span>Ростов</span>
+        </button>
+        <button type="button" class="chip js-glare-target" data-region="Краснодарский край">
+          <svg><use href="#custom-icon-target"></use></svg>
+          <span>Краснодар</span>
+        </button>
+        <button type="button" class="chip js-glare-target" data-region="Республика Крым">
+          <svg><use href="#custom-icon-target"></use></svg>
+          <span>Крым</span>
+        </button>
+        <button type="button" class="chip js-glare-target" data-region="Самарская область">
+          <svg><use href="#custom-icon-target"></use></svg>
+          <span>Самара</span>
+        </button>
+        <button type="button" class="chip js-glare-target" data-region="Саратовская область">
+          <svg><use href="#custom-icon-target"></use></svg>
+          <span>Саратов</span>
+        </button>
+        <button type="button" class="chip js-glare-target" data-region="Башкортостан">
+          <svg><use href="#custom-icon-target"></use></svg>
+          <span>Уфа</span>
+        </button>
       </div>
 
-      <!-- Feed / Details Card View -->
-      <div class="incident-card" id="activeIncidentCard">
-        <div class="card-header">
-          <div class="card-status-dot status-green" id="cardStatusDot"></div>
-          <div class="card-titles">
-            <h3 class="card-headline" id="cardHeadline">ОПЕРАТИВНАЯ ОБСТАНОВКА СПОКОЙНАЯ</h3>
-            <span class="card-sub" id="cardSub">ПРЯМОЙ МОНИТОРИНГ ЭФИРА И МЧС</span>
+      <!-- YDS 2.1 Двухсегментный стек (1.5px зазор) -->
+      <div class="yds-segmented-stack">
+        <!-- Верхний сегмент: статистика БПЛА / Ракеты и открытие модального журнала -->
+        <button type="button" class="stack-summary-segment js-glare-target" id="openFeedModalBtn" aria-haspopup="dialog">
+          <div class="summary-metrics">
+            <span class="metric-pill">
+              <svg><use href="#custom-icon-drone"></use></svg>
+              <span>БПЛА:</span>
+              <span class="metric-val" id="statDroneCount">0</span>
+            </span>
+            <span class="metric-pill">
+              <svg><use href="#custom-icon-rocket"></use></svg>
+              <span>Ракеты:</span>
+              <span class="metric-val" id="statRocketCount">0</span>
+            </span>
           </div>
-          <button class="card-refresh-btn" id="refreshBtn" title="Обновить">
-            <span class="refresh-icon">🔄</span>
-          </button>
-        </div>
 
-        <div class="card-body" id="cardBody">
-          В выбранном секторе активных предупреждений об атаках беспилотных летательных аппаратов (БПЛА) и ракетной опасности не зафиксировано.
-        </div>
-
-        <div class="card-footer">
-          <div class="card-timer">
-            <span class="timer-icon">🕒</span>
-            <span id="cardLastUpdate">Обновлено: только что</span>
+          <div class="summary-action-right">
+            <span id="openFeedLabel">Журнал сводок</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M7 17L17 7"></path>
+              <path d="M7 7h10v10"></path>
+            </svg>
           </div>
-          <div class="card-badge" id="cardThreatCount">УГРОЗ: 0</div>
+        </button>
+
+        <!-- Нижний сегмент: карточка активного инцидента -->
+        <div class="incident-card js-glare-target" id="activeIncidentCard">
+          <div class="card-header">
+            <div class="icon-well">
+              <svg width="21" height="21" id="cardTypeSvg"><use href="#custom-icon-shield"></use></svg>
+              <div class="card-status-dot status-green" id="cardStatusDot"></div>
+            </div>
+
+            <div class="card-titles">
+              <h3 class="card-headline" id="cardHeadline">Оперативная обстановка спокойная</h3>
+              <span class="card-sub" id="cardSub">Прямой мониторинг эфира и оповещений</span>
+            </div>
+
+            <button type="button" class="card-refresh-btn" id="refreshBtn" title="Обновить сводку" aria-label="Обновить сводку">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 2v6h-6"></path>
+                <path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path>
+                <path d="M3 22v-6h6"></path>
+                <path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path>
+              </svg>
+            </button>
+          </div>
+
+          <div class="card-body" id="cardBody">
+            В выбранном секторе активных предупреждений об атаках беспилотных летательных аппаратов (БПЛА) и ракетной опасности не зафиксировано.
+          </div>
+
+          <div class="card-footer">
+            <div class="card-timer">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="9"></circle>
+                <polyline points="12 7 12 12 15.5 14"></polyline>
+              </svg>
+              <span id="cardLastUpdate">Обновлено: только что</span>
+            </div>
+            <div class="card-badge" id="cardThreatCount">УГРОЗ: 0</div>
+          </div>
         </div>
       </div>
     </div>
   </div>
 
+  <!-- 3D МОДАЛЬНОЕ ОКНО ЖУРНАЛА ВСЕХ СВОДОК (В СТИЛЕ QR MODAL ИЗ INDEX.HTML) -->
+  <div
+    id="feedModalBackdrop"
+    class="feed-modal-backdrop"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="feedModalTitle"
+    aria-hidden="true"
+  >
+    <div class="feed-modal-card">
+      <div class="modal-top-row">
+        <div class="modal-title-group">
+          <h2 class="modal-title" id="feedModalTitle">Журнал оперативных сводок</h2>
+          <p class="modal-subtitle" id="feedModalSubtitle">Выберите сектор для фокусировки радара</p>
+        </div>
+        <button type="button" class="modal-close-btn" id="feedModalCloseBtn" aria-label="Закрыть журнал">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div class="feed-scroll-list" id="incidentFeedList"></div>
+    </div>
+  </div>
+
+  <!-- YDS 2.1 GLASS TOAST NOTIFICATION -->
+  <div
+    id="toastViewport"
+    class="toast-viewport"
+    role="status"
+    aria-live="polite"
+    aria-atomic="true"
+  >
+    <div class="glass-toast">
+      <span class="toast-badge" aria-hidden="true">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+      </span>
+      <span id="toastMessage">Сводка обновлена</span>
+    </div>
+  </div>
+
   <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="app.js"></script>
+
+  <!-- Встроенные резервные данные (полностью очищены от эмодзи) -->
+  <script>
+window.__EMBEDDED_INITIAL_DATA__ = {
+  "updated_at": "2026-11-02T10:31:21.906820+00:00",
+  "status": "alert",
+  "summary": {
+    "total_threats": 27,
+    "drone_count": 26,
+    "rocket_count": 1
+  },
+  "incidents": [
+    {
+      "id": "a688bc948475d99feedf63cae70b37c3273663f245fe5a1b134f28fbab020fa2",
+      "kind": "drone",
+      "region": "Республика Татарстан",
+      "city": "Республика Татарстан",
+      "time": "02.11.2026 11:59",
+      "text": "✈️ Оперативно-тактической авиацией, ударными беспилотными летательными аппаратами, ракетными войсками и артиллерией группировок войск Вооруженных Сил Российской Федерации нанесено поражение объектам энергетической и транспортной инфраструктуры, используемым ВСУ, цехам сборки и местам хранения беспилотных летательных аппаратов, а также пунктам време"
+    },
+    {
+      "id": "b8dc1b14a9f145eb244bf8feb865bd75ceec8671cfadbfa6e3d3ad96cfacda0a",
+      "kind": "drone",
+      "region": "Белгородская область",
+      "city": "Брянская область",
+      "time": "02.11.2026 08:34",
+      "text": "За прошедшую ночь силами противовоздушной обороны было уничтожено 212 БПЛА над территориями Брянской, Белгородской, Курской, Калужской, Тульской, Воронежской, Псковской, Орловской, Липецкой, Саратовской, Самарской, Рязанской, Тамбовской, Ростовской областей, Московского региона, Краснодарского края, Республики Крым и над акваториями Черного и Азовс"
+    },
+    {
+      "id": "eeb76fb8ac75edf0936ca448774f40068e44b38a9d01a62e39193ca41df2450e",
+      "kind": "drone",
+      "region": "Белгородская область",
+      "city": "Брянская область",
+      "time": "02.11.2026 08:31",
+      "text": "⚡️ В течение прошедшей ночи дежурными силами ПВО перехвачены и уничтожены 212 украинских беспилотных летательных аппаратов самолетного типа над территориями Брянской, Белгородской, Курской, Калужской, Тульской, Воронежской, Псковской, Орловской, Липецкой, Саратовской, Самарской, Рязанской, Тамбовской, Ростовской областей, Московского региона, Красн"
+    },
+    {
+      "id": "dd4b90d8bae875bd94ff2e55a67d499d159952c8ff2eb60b6631bdd94a6317e6",
+      "kind": "drone",
+      "region": "Орловская область",
+      "city": "Орловская область",
+      "time": "02.11.2026 08:09",
+      "text": "Орловская область Опасность по БПЛА ❗️"
+    },
+    {
+      "id": "80ad9d4c8bf3375d855067473ee3aa0de513e50cf8df6f797ae14f6735228d88",
+      "kind": "drone",
+      "region": "Республика Татарстан",
+      "city": "Татарстан",
+      "time": "02.11.2026 05:46",
+      "text": "Черемшанский район Нурлатский район Бугульминский район Лениногорский район Республика Татарстан Внимание по БПЛА Повторно."
+    },
+    {
+      "id": "a8f6edfd3323a86a24fa3cf55ae630310b3809440a24e8f01dac2423f0409e3c",
+      "kind": "drone",
+      "region": "Республика Татарстан",
+      "city": "Татарстан",
+      "time": "02.11.2026 05:45",
+      "text": "Самарская область внимание по пролетам БПЛА в направлении Республики Татарстан и далее по югу в направлении Республики Башкортостан"
+    },
+    {
+      "id": "caec14bacca590fa70c1eaf918ab19312d310d3b55da0ed85bb8dead181b3405",
+      "kind": "drone",
+      "region": "Республика Татарстан",
+      "city": "Татарстан",
+      "time": "02.11.2026 03:54",
+      "text": "🔴 Черемшанский район Нурлатский район Бугульминский район Лениногорский район Республика Татарстан Внимание по БПЛА"
+    },
+    {
+      "id": "a21c7cdf6515983e101a7f635bbefa56f4005ce5772f3a1d2051a9e3ff86b554",
+      "kind": "drone",
+      "region": "Республика Татарстан",
+      "city": "Татарстан",
+      "time": "02.11.2026 03:39",
+      "text": "Республика Татарстан Опасность по БПЛА"
+    },
+    {
+      "id": "6d0f000f1dda1e0646aaa4005fd242636f465ffb5bac08879144fc9eaef95d0d",
+      "kind": "drone",
+      "region": "Республика Татарстан",
+      "city": "Татарстан",
+      "time": "02.11.2026 03:08",
+      "text": "Ульяновская область Самарская область Республика Татарстан На эту ночь/утро режим «повышенного внимания по БПЛА» Предварительно цель противника данные регионы. Возможно пролеты в глубокий тыл."
+    },
+    {
+      "id": "bda553be0204b747725586ca4395e2f90c0d64dbae9533cc188433cd00e468e6",
+      "kind": "drone",
+      "region": "Республика Татарстан",
+      "city": "Татарстан",
+      "time": "01.11.2026 04:54",
+      "text": "Республика Татарстан Республика Марий Эл Опасность по БПЛА"
+    },
+    {
+      "id": "9c9d7ec672f672217b528776f3d9f92863c740defa0b17c25ad6ce427de22ed7",
+      "kind": "rocket",
+      "region": "Республика Татарстан",
+      "city": "Татарстан",
+      "time": "01.11.2026 01:00",
+      "text": "Республика Татарстан Ракетная опасность"
+    },
+    {
+      "id": "8633621cf6d88ebcd6fc469a26251165ffab254ca23989cc61c81d7a534c1ca1",
+      "kind": "drone",
+      "region": "Республика Татарстан",
+      "city": "Татарстан",
+      "time": "31.10.2026 10:27",
+      "text": "За прошедшую ночь силами противовоздушной обороны было уничтожено 433 БПЛА над территориями Белгородской, Брянской, Курской, Калужской, Тульской, Орловской, Липецкой, Воронежской, Смоленской, Тамбовской, Волгоградской, Ростовской, Пензенской, Самарской, Саратовской, Оренбургской, Ульяновской областей и республик Татарстан и Башкортостан."
+    },
+    {
+      "id": "ba61546927ee286dfa582278e7dda96d180d09231ff743a58bc05226e118e3e9",
+      "kind": "drone",
+      "region": "Республика Татарстан",
+      "city": "Татарстан",
+      "time": "31.10.2026 01:15",
+      "text": "Республика Татарстан Республика Чувашия Опасность по БПЛА"
+    },
+    {
+      "id": "a4f72c9afa58894d2eb93c67c5ef8c6023c30ba7221311c41594f6e2e6390179",
+      "kind": "drone",
+      "region": "Республика Татарстан",
+      "city": "Татарстан",
+      "time": "30.10.2026 10:06",
+      "text": "За прошедшую ночь и утро силами противовоздушной обороны было уничтожено 1043 БПЛА над территориями Белгородской, Брянской, Воронежской, Волгоградской, Курской, Калужской, Костромской, Орловской, Пензенской, Ростовской, Рязанской, Смоленской, Самарской, Саратовской, Тверской, Тульской, Ярославской областей, Московского региона и Республики Татарста"
+    },
+    {
+      "id": "0de2f6e1a8b39969fb99021f61b15a31f3e8cd318203d572e1621a6167a97406",
+      "kind": "drone",
+      "region": "Московская область",
+      "city": "Московская область",
+      "time": "время не указано",
+      "text": "БПЛА Россия Мониторинг воздушной обстановки"
+    },
+    {
+      "id": "9c9395676b33736b0690c7107cb418c42be7a8bacbfeddcab140061d3004612b",
+      "kind": "drone",
+      "region": "Московская область",
+      "city": "Республика Татарстан",
+      "time": "время не указано",
+      "text": "«Мста» для врага страшна 💥 Огнем из гаубицы «Мста-С» артиллеристы 20-й гвардейской общевойсковой армии группировки «Запад» отрабатывают по пунктам управления БПЛА, укрытиям и складам боеприпасов ВСУ в зоне спецоперации. ▫️"
+    },
+    {
+      "id": "64aeca254a73a033fc4fb9ca72b31522bad16c07492b40c7e8ae1e454fbbee4e",
+      "kind": "drone",
+      "region": "Московская область",
+      "city": "Республика Татарстан",
+      "time": "время не указано",
+      "text": "Артиллеристы и дроноводы размотали врага в Дружковке 🤝 Расчеты гаубицы Д-30 и FPV-дронов группировки «Южная» настигли пункт управления БПЛА, блиндаж с оборудованием и беспилотниками, а также укрытия с живой силой противника в районе Дружковки. 📍 Краматорское направление ▫️"
+    },
+    {
+      "id": "7f8bce8a7aa080510d93b372a9c489db4b02622943f24598e2c946a6f9f83e19",
+      "kind": "drone",
+      "region": "Россия",
+      "city": "Россия",
+      "time": "время не указано",
+      "text": "💥 Расчеты ПВО «Варяга» сбили вражеские беспилотники над трассой «Новороссия». Среди уничтоженных целей: ▫️ дроны-камикадзе Trust, «Рубака», Hornet, дальнобойные «Анубисы», FP-1, B-2; ▫️ дроны-приманки «Майя». #ВойскаБПС"
+    },
+    {
+      "id": "f3e7fd32260e8430ec2417c7be3cbf4cd1ce52e87ef17bc6bb9d6b1ae012a3e2",
+      "kind": "drone",
+      "region": "Москва",
+      "city": "Московская область",
+      "time": "время не указано",
+      "text": "▫️ Сработали по красоте! Бойцы 41-го мотострелкового полка 44-го армейского корпуса группировки «Север» рассказали об освобождении Бариловки в Сумской области. ▫️ Перед броском штурмовики, артиллеристы и операторы БПЛА сработали как единый механизм – полностью вскрыли основные узлы обороны ВСУ. 📍 Разведчики дали точные координаты вражеских опорнико"
+    },
+    {
+      "id": "8ae3d86517e98247a6813d2ae2c170caacb137ccab723d0c009fecb6e8118b04",
+      "kind": "drone",
+      "region": "Липецкая область",
+      "city": "Липецк",
+      "time": "время не указано",
+      "text": "БПЛА Россия Мониторинг воздушной обстановки"
+    },
+    {
+      "id": "c23f30726e0dbe9b043c9b9fc0f4d19f41675176c6ddcac888399b6b07a36e97",
+      "kind": "drone",
+      "region": "Москва",
+      "city": "Московский регион",
+      "time": "время не указано",
+      "text": "БПЛА Россия Мониторинг воздушной обстановки"
+    },
+    {
+      "id": "9bc630ff11069ee2dcab5c782ae03664e8f323e1f4dd899670663f97c9759e7a",
+      "kind": "drone",
+      "region": "Московская область",
+      "city": "Подмосковье",
+      "time": "время не указано",
+      "text": "БПЛА Россия Мониторинг воздушной обстановки"
+    },
+    {
+      "id": "21e34d7b9e46c744119a1875384b8185187ad7f2d7868feffcb1d793957d6a01",
+      "kind": "drone",
+      "region": "Московская область",
+      "city": "Подмосковье",
+      "time": "время не указано",
+      "text": "Подписаться на регион Телеграм-канал Телеграм-канал Московская область БПЛА BK"
+    },
+    {
+      "id": "5e2950d61b4590c86eaf0126199af6c728f3aeb67ce2a79d8e239c5fcf15202c",
+      "kind": "drone",
+      "region": "Московская область",
+      "city": "Подмосковье",
+      "time": "время не указано",
+      "text": "Подписаться на регион Телеграм-канал Телеграм-канал Московская область БПЛА BK"
+    },
+    {
+      "id": "a6756e199df96860389288309298ba96194683c1793e35fd48199761d4706ca1",
+      "kind": "drone",
+      "region": "Республика Татарстан",
+      "city": "Татарстан",
+      "time": "время не указано",
+      "text": "БПЛА Россия Мониторинг воздушной обстановки"
+    }
+  ]
+};
+  </script>
+
+  <script>
+    (function () {
+      'use strict';
+
+      const tg = window.Telegram?.WebApp;
+      if (tg) {
+        try {
+          tg.ready();
+          tg.expand();
+          if (tg.setHeaderColor) tg.setHeaderColor('#0b0c0e');
+          if (tg.setBackgroundColor) tg.setBackgroundColor('#0b0c0e');
+        } catch (_) {}
+      }
+
+      // Кастомные SVG для кнопки звука (0% эмодзи)
+      const SVG_SOUND_OFF = `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+          <line x1="22" y1="9" x2="16" y2="15"></line>
+          <line x1="16" y1="9" x2="22" y2="15"></line>
+        </svg>
+      `;
+
+      const SVG_SOUND_ON = `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+          <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+          <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+        </svg>
+      `;
+
+      /**
+       * Очищает любой входящий текст от юникод-эмодзи (из внешних JSON источников)
+       * и заменяет ключевые символы на кастомные встроенные векторные SVG-иконки
+       */
+      function sanitizeAndFormatText(rawText) {
+        if (!rawText) return '';
+        const escaped = rawText
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+
+        // Заменяем известные эмодзи из Telegram-сводок на наши кастомные векторные SVG
+        let formatted = escaped
+          .replace(/✈️|🛸/g, '<svg class="inline-svg-icon"><use href="#custom-icon-drone"></use></svg>')
+          .replace(/🚀/g, '<svg class="inline-svg-icon"><use href="#custom-icon-rocket"></use></svg>')
+          .replace(/⚡️|💥/g, '<svg class="inline-svg-icon"><use href="#custom-icon-bolt"></use></svg>')
+          .replace(/❗️|🔴|⚠️/g, '<svg class="inline-svg-icon"><use href="#custom-icon-alert"></use></svg>')
+          .replace(/📍/g, '<svg class="inline-svg-icon"><use href="#custom-icon-target"></use></svg>')
+          .replace(/▫️/g, ' · ');
+
+        // Удаляем любые оставшиеся системные эмодзи, чтобы гарантировать 100% отсутствие эмодзи
+        formatted = formatted.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE00}-\u{FE0F}]/gu, '');
+        return formatted.replace(/\s{2,}/g, ' ').trim();
+      }
+
+      // Справочник координат регионов и городов РФ
+      const REGION_COORDS = {
+        "москва": [55.7558, 37.6173],
+        "московский регион": [55.7558, 37.6173],
+        "московская область": [55.55, 37.85],
+        "подмосковье": [55.55, 37.85],
+        "белгородская область": [50.5954, 36.5873],
+        "белгород": [50.5954, 36.5873],
+        "шебекино": [50.4136, 36.8928],
+        "курская область": [51.7303, 36.1927],
+        "курск": [51.7303, 36.1927],
+        "брянская область": [53.2436, 34.3634],
+        "брянск": [53.2436, 34.3634],
+        "воронежская область": [51.6608, 39.2003],
+        "воронеж": [51.6608, 39.2003],
+        "ростовская область": [47.2357, 39.7015],
+        "ростов": [47.2357, 39.7015],
+        "таганрог": [47.2362, 38.8969],
+        "краснодарский край": [45.0355, 38.9753],
+        "краснодар": [45.0355, 38.9753],
+        "сочи": [43.6028, 39.7342],
+        "новороссийск": [44.7244, 37.7675],
+        "республика крым": [44.9521, 34.1024],
+        "крым": [44.9521, 34.1024],
+        "севастополь": [44.6167, 33.5254],
+        "симферополь": [44.9521, 34.1024],
+        "саратовская область": [51.5336, 46.0343],
+        "саратов": [51.5336, 46.0343],
+        "энгельс": [51.5008, 46.1264],
+        "самарская область": [53.1959, 50.1002],
+        "самара": [53.1959, 50.1002],
+        "калужская область": [54.5138, 36.2612],
+        "калуга": [54.5138, 36.2612],
+        "тульская область": [54.1931, 37.6173],
+        "тула": [54.1931, 37.6173],
+        "смоленская область": [54.7818, 32.0401],
+        "смоленск": [54.7818, 32.0401],
+        "орловская область": [52.9651, 36.0785],
+        "орёл": [52.9651, 36.0785],
+        "орел": [52.9651, 36.0785],
+        "липецкая область": [52.6103, 39.5947],
+        "липецк": [52.6103, 39.5947],
+        "рязанская область": [54.6295, 39.7424],
+        "рязань": [54.6295, 39.7424],
+        "тамбовская область": [52.7212, 41.4523],
+        "тамбов": [52.7212, 41.4523],
+        "санкт-петербург": [59.9343, 30.3351],
+        "ленинградская область": [59.9343, 30.3351],
+        "псковская область": [57.8136, 28.3496],
+        "псков": [57.8136, 28.3496],
+        "тверская область": [56.8587, 35.9176],
+        "ярославская область": [57.6261, 39.8845],
+        "костромская область": [57.7679, 40.9269],
+        "волгоградская область": [48.7080, 44.5133],
+        "волгоград": [48.7080, 44.5133],
+        "пензенская область": [53.1950, 45.0183],
+        "ульяновская область": [54.3142, 48.4031],
+        "ульяновск": [54.3142, 48.4031],
+        "оренбургская область": [51.7682, 55.0970],
+        "башкортостан": [54.7388, 55.9721],
+        "уфа": [54.7388, 55.9721],
+        "республика татарстан": [55.7963, 49.1088],
+        "татарстан": [55.7963, 49.1088],
+        "казань": [55.7963, 49.1088],
+        "альметьевск": [54.9014, 52.2971],
+        "бугульма": [54.5368, 52.7987],
+        "марий эл": [56.6344, 47.8998],
+        "чувашия": [56.1322, 47.2519],
+        "чувашская республика": [56.1322, 47.2519],
+        "россия": [54.2, 42.0]
+      };
+
+      // Toast-уведомления в стиле index.html
+      const toastViewport = document.getElementById('toastViewport');
+      const toastMessage = document.getElementById('toastMessage');
+      let toastTimer = null;
+
+      function showToast(msg) {
+        if (!toastViewport || !toastMessage) return;
+        toastMessage.textContent = msg;
+        toastViewport.classList.add('is-visible');
+        if (toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => {
+          toastViewport.classList.remove('is-visible');
+        }, 2200);
+      }
+
+      // Аудио-синтезатор радара
+      let isAudioEnabled = false;
+      let audioCtx = null;
+
+      function playRadarPing() {
+        if (!isAudioEnabled) return;
+        try {
+          if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          }
+          if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+          }
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(960, audioCtx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(520, audioCtx.currentTime + 0.16);
+          gain.gain.setValueAtTime(0.09, audioCtx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.19);
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start();
+          osc.stop(audioCtx.currentTime + 0.19);
+        } catch (_) {}
+      }
+
+      // =======================================================================
+      // ИНИЦИАЛИЗАЦИЯ КАРТЫ БЕЗ API + ВСТРОЕННЫЙ ВЕКТОРНЫЙ КОНТУР
+      // =======================================================================
+      const map = L.map('map', {
+        center: [53.6, 42.2],
+        zoom: 5,
+        minZoom: 3,
+        maxZoom: 13,
+        zoomControl: false,
+        attributionControl: false
+      });
+
+      const osmTileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        crossOrigin: true
+      });
+
+      const satelliteTileLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        maxZoom: 18
+      });
+
+      osmTileLayer.addTo(map);
+
+      // Встроенная векторная гео-сетка и контур РФ (работает без внешних тайлов и без API)
+      const vectorRadarGroup = L.layerGroup().addTo(map);
+
+      function buildMonochromeVectorRadar() {
+        vectorRadarGroup.clearLayers();
+
+        for (let lat = 42; lat <= 66; lat += 4) {
+          L.polyline([[lat, 22], [lat, 64]], {
+            color: '#ffffff',
+            weight: 0.5,
+            opacity: 0.06,
+            interactive: false
+          }).addTo(vectorRadarGroup);
+        }
+        for (let lng = 26; lng <= 62; lng += 6) {
+          L.polyline([[42, lng], [66, lng]], {
+            color: '#ffffff',
+            weight: 0.5,
+            opacity: 0.06,
+            interactive: false
+          }).addTo(vectorRadarGroup);
+        }
+
+        [350000, 750000, 1200000].forEach((radius) => {
+          L.circle([54.0, 41.0], {
+            radius: radius,
+            color: '#ffffff',
+            weight: 0.6,
+            opacity: 0.11,
+            fill: false,
+            dashArray: '3 6',
+            interactive: false
+          }).addTo(vectorRadarGroup);
+        });
+
+        const russiaSectorPolygon = [
+          [60.0, 29.5], [64.5, 34.0], [66.5, 42.0], [64.0, 56.0],
+          [58.0, 59.5], [51.5, 58.0], [50.5, 51.0], [46.5, 48.0],
+          [43.0, 47.5], [43.5, 39.8], [44.5, 33.5], [46.2, 33.0],
+          [47.2, 38.5], [50.4, 36.2], [52.1, 34.0], [54.8, 31.8],
+          [57.8, 28.2], [60.0, 29.5]
+        ];
+
+        L.polygon(russiaSectorPolygon, {
+          color: '#ffffff',
+          weight: 1,
+          opacity: 0.16,
+          fillColor: '#ffffff',
+          fillOpacity: 0.02,
+          interactive: false
+        }).addTo(vectorRadarGroup);
+      }
+
+      buildMonochromeVectorRadar();
+
+      const MAP_MODES = [
+        { id: 'oled', label: 'OLED Монолит', filterClass: 'map-mode-oled' },
+        { id: 'vector', label: 'Чистый вектор (Без сети)', filterClass: '' },
+        { id: 'satellite', label: 'Спутник ВКО', filterClass: 'map-mode-satellite' },
+        { id: 'light', label: 'Контрастная проекция', filterClass: 'map-mode-light' }
+      ];
+
+      let currentModeIndex = 0;
+
+      function applyMapMode(index) {
+        const mode = MAP_MODES[index];
+        const mapEl = document.getElementById('map');
+        const layerLabel = document.getElementById('mapLayerName');
+
+        if (mapEl) {
+          MAP_MODES.forEach((m) => {
+            if (m.filterClass) mapEl.classList.remove(m.filterClass);
+          });
+          if (mode.filterClass) mapEl.classList.add(mode.filterClass);
+        }
+        if (layerLabel) layerLabel.textContent = mode.label;
+
+        if (map.hasLayer(osmTileLayer)) map.removeLayer(osmTileLayer);
+        if (map.hasLayer(satelliteTileLayer)) map.removeLayer(satelliteTileLayer);
+
+        if (mode.id === 'oled' || mode.id === 'light') {
+          osmTileLayer.addTo(map);
+        } else if (mode.id === 'satellite') {
+          satelliteTileLayer.addTo(map);
+        }
+
+        showToast(`Проекция карты: ${mode.label}`);
+        if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
+      }
+
+      document.getElementById('layerSwitchBtn')?.addEventListener('click', () => {
+        currentModeIndex = (currentModeIndex + 1) % MAP_MODES.length;
+        applyMapMode(currentModeIndex);
+      });
+
+      document.getElementById('resetViewBtn')?.addEventListener('click', () => {
+        map.flyTo([53.6, 42.2], 5, { duration: 1.1 });
+        showToast('Обзор: Вся Россия');
+        if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+      });
+
+      // =======================================================================
+      // МАРКЕРЫ И РЕНДЕР ДАННЫХ (С КАСТОМНЫМИ SVG ВМЕСТО ЭМОДЗИ)
+      // =======================================================================
+      let currentMarkers = [];
+      let latestData = null;
+
+      function resolveCoords(locationName) {
+        if (!locationName) return null;
+        const clean = locationName.toLowerCase().trim();
+        for (const [key, coords] of Object.entries(REGION_COORDS)) {
+          if (clean.includes(key) || key.includes(clean)) {
+            return coords;
+          }
+        }
+        return null;
+      }
+
+      function createBeaconMarker(coords, title, count, isRocket = false) {
+        const colorClass = isRocket ? 'red' : 'amber';
+        const ringClass = isRocket ? 'red' : 'amber';
+        const svgRef = isRocket ? '#custom-icon-rocket' : '#custom-icon-drone';
+        const countBadgeHtml = count > 1 ? `<span class="pin-counter-badge">${count}</span>` : '';
+
+        const customIcon = L.divIcon({
+          className: 'custom-beacon',
+          html: `
+            <div class="yds-pin-wrap">
+              <div class="beacon-ring ${ringClass}"></div>
+              <div class="beacon-ring delay ${ringClass}"></div>
+              <div class="beacon-core ${colorClass}">
+                <svg><use href="${svgRef}"></use></svg>
+                ${countBadgeHtml}
+              </div>
+              <div class="beacon-label">${title}</div>
+            </div>
+          `,
+          iconSize: [30, 30],
+          iconAnchor: [15, 15]
+        });
+
+        return L.marker(coords, { icon: customIcon });
+      }
+
+      async function fetchRadarData(isManual = false) {
+        const refreshBtn = document.getElementById('refreshBtn');
+        if (refreshBtn) refreshBtn.style.transform = 'rotate(360deg)';
+
+        if (isManual && tg?.HapticFeedback) {
+          tg.HapticFeedback.impactOccurred('light');
+        }
+
+        const cdnUrl = 'https://9272972639103660a-sys.github.io/radar-webapp/data.json';
+        const rawUrl = 'https://raw.githubusercontent.com/9272972639103660a-sys/radar-webapp/main/data.json';
+
+        try {
+          let res = null;
+          if (window.location.protocol === 'file:') {
+            try {
+              res = await fetch(`${cdnUrl}?_t=${Date.now()}`);
+              if (!res.ok) throw new Error();
+            } catch (_) {
+              res = await fetch(`${rawUrl}?_t=${Date.now()}`);
+            }
+          } else {
+            try {
+              res = await fetch(`data.json?_t=${Date.now()}`);
+              if (!res.ok) throw new Error();
+            } catch (_) {
+              try {
+                res = await fetch(`${cdnUrl}?_t=${Date.now()}`);
+                if (!res.ok) throw new Error();
+              } catch (__) {
+                res = await fetch(`${rawUrl}?_t=${Date.now()}`);
+              }
+            }
+          }
+
+          if (!res || !res.ok) throw new Error('Network error');
+          const data = await res.json();
+          latestData = data;
+          renderData(data);
+          if (isManual) showToast('Оперативная сводка обновлена');
+        } catch (_) {
+          if (window.__EMBEDDED_INITIAL_DATA__) {
+            latestData = window.__EMBEDDED_INITIAL_DATA__;
+            renderData(latestData);
+            if (isManual) showToast('Загружена резервная сводка');
+          } else {
+            renderEmptyState();
+          }
+        } finally {
+          setTimeout(() => {
+            if (refreshBtn) refreshBtn.style.transform = 'none';
+          }, 420);
+        }
+      }
+
+      function renderData(data) {
+        currentMarkers.forEach((m) => map.removeLayer(m));
+        currentMarkers = [];
+
+        const incidents = data.incidents || [];
+        const activeIncidents = incidents.filter((i) => i.kind !== 'clear');
+        const threatCount = activeIncidents.length;
+
+        const droneCount = activeIncidents.filter((i) => i.kind === 'drone').length;
+        const rocketCount = activeIncidents.filter((i) => i.kind === 'rocket').length;
+
+        const statDroneEl = document.getElementById('statDroneCount');
+        const statRocketEl = document.getElementById('statRocketCount');
+        const openFeedLabel = document.getElementById('openFeedLabel');
+
+        if (statDroneEl) statDroneEl.textContent = String(droneCount);
+        if (statRocketEl) statRocketEl.textContent = String(rocketCount);
+        if (openFeedLabel) openFeedLabel.textContent = `Журнал (${threatCount})`;
+
+        // Группируем события по координатам, чтобы пины не перекрывали друг друга
+        const groupedByLocation = new Map();
+
+        activeIncidents.forEach((inc) => {
+          let coords = inc.coords || resolveCoords(inc.city) || resolveCoords(inc.region) || resolveCoords(inc.location);
+          if (coords) {
+            const key = `${coords[0].toFixed(2)}_${coords[1].toFixed(2)}`;
+            if (!groupedByLocation.has(key)) {
+              groupedByLocation.set(key, {
+                coords: coords,
+                label: inc.region || inc.city,
+                items: []
+              });
+            }
+            groupedByLocation.get(key).items.push(inc);
+          }
+        });
+
+        const statusBadge = document.getElementById('overallStatusBadge');
+        const statusText = document.getElementById('overallStatusText');
+        const badgeDot = statusBadge?.querySelector('.pulse-indicator');
+
+        if (threatCount > 0) {
+          statusBadge?.setAttribute('data-state', 'alert');
+          if (statusText) statusText.textContent = `Тревога · ${groupedByLocation.size || threatCount} сект.`;
+          if (badgeDot) badgeDot.className = 'pulse-indicator status-red';
+          playRadarPing();
+        } else {
+          statusBadge?.setAttribute('data-state', 'safe');
+          if (statusText) statusText.textContent = 'Небо чисто';
+          if (badgeDot) badgeDot.className = 'pulse-indicator status-green';
+        }
+
+        groupedByLocation.forEach((group) => {
+          const hasRocket = group.items.some((i) => i.kind === 'rocket');
+          const marker = createBeaconMarker(group.coords, group.label, group.items.length, hasRocket);
+          let cycleIdx = 0;
+
+          marker.on('click', () => {
+            const chosen = group.items[cycleIdx % group.items.length];
+            cycleIdx++;
+            showIncidentDetails(chosen, group.items.length);
+            map.flyTo(group.coords, Math.max(map.getZoom(), 7), { duration: 0.85 });
+            if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+          });
+
+          marker.addTo(map);
+          currentMarkers.push(marker);
+        });
+
+        if (threatCount > 0) {
+          showIncidentDetails(activeIncidents[0]);
+        } else {
+          renderEmptyState();
+        }
+
+        renderFeedModalList(activeIncidents);
+
+        const cardTimer = document.getElementById('cardLastUpdate');
+        if (cardTimer && data.updated_at) {
+          const d = new Date(data.updated_at);
+          const timeStr = d.toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow' });
+          cardTimer.textContent = `Обновлено в ${timeStr} МСК`;
+        }
+      }
+
+      function renderEmptyState() {
+        const card = document.getElementById('activeIncidentCard');
+        const dot = document.getElementById('cardStatusDot');
+        const typeSvg = document.getElementById('cardTypeSvg');
+        const headline = document.getElementById('cardHeadline');
+        const sub = document.getElementById('cardSub');
+        const body = document.getElementById('cardBody');
+        const threatBadge = document.getElementById('cardThreatCount');
+
+        if (card) card.className = 'incident-card js-glare-target';
+        if (dot) dot.className = 'card-status-dot status-green';
+        if (typeSvg) typeSvg.innerHTML = '<use href="#custom-icon-shield"></use>';
+        if (headline) headline.textContent = 'Оперативная обстановка спокойная';
+        if (sub) sub.textContent = 'Прямой мониторинг эфира и МЧС';
+        if (body) body.textContent = 'В воздушном пространстве РФ активных тревог и подтверждённых угроз БПЛА не зафиксировано.';
+        if (threatBadge) {
+          threatBadge.textContent = 'УГРОЗ: 0';
+          threatBadge.style.color = 'var(--status-online-text)';
+        }
+      }
+
+      function showIncidentDetails(inc, sectorCount = 1) {
+        const card = document.getElementById('activeIncidentCard');
+        const dot = document.getElementById('cardStatusDot');
+        const typeSvg = document.getElementById('cardTypeSvg');
+        const headline = document.getElementById('cardHeadline');
+        const sub = document.getElementById('cardSub');
+        const body = document.getElementById('cardBody');
+        const threatBadge = document.getElementById('cardThreatCount');
+
+        const isRocket = inc.kind === 'rocket';
+        if (card) card.className = 'incident-card danger js-glare-target';
+        if (dot) dot.className = isRocket ? 'card-status-dot status-red' : 'card-status-dot status-amber';
+        if (typeSvg) {
+          typeSvg.innerHTML = `<use href="${isRocket ? '#custom-icon-rocket' : '#custom-icon-drone'}"></use>`;
+        }
+
+        const kindNames = {
+          drone: 'Опасность БПЛА',
+          rocket: 'Ракетная опасность',
+          alarm: 'Воздушная тревога'
+        };
+
+        const titleKind = kindNames[inc.kind] || 'Внимание: угроза';
+        const loc = (inc.city || inc.region || 'Регион').replace(/[\u{1F300}-\u{1FAFF}]/gu, '');
+        if (headline) headline.textContent = `${titleKind} · ${loc}`;
+        if (sub) sub.textContent = `Зафиксировано: ${inc.time || 'оперативно'}`;
+        if (body) {
+          body.innerHTML = sanitizeAndFormatText(
+            inc.text || 'Зафиксировано движение воздушных целей. Средства ПВО находятся в готовности.'
+          );
+        }
+
+        if (threatBadge) {
+          threatBadge.textContent = sectorCount > 1 ? `СВОДОК В СЕКТОРЕ: ${sectorCount}` : 'АКТИВНО';
+          threatBadge.style.color = isRocket ? 'var(--status-danger)' : 'var(--status-amber)';
+        }
+      }
+
+      // Рендер списка в 3D модальном окне журнала
+      function renderFeedModalList(incidents) {
+        const listEl = document.getElementById('incidentFeedList');
+        if (!listEl) return;
+
+        listEl.innerHTML = '';
+        if (!incidents || incidents.length === 0) {
+          listEl.innerHTML = `
+            <div style="text-align:center; padding:36px 16px; color:var(--text-tertiary);">
+              <svg width="34" height="34" style="margin-bottom:10px; color:var(--status-online-text);"><use href="#custom-icon-shield"></use></svg>
+              <div style="font-size:14px; font-weight:600; color:var(--text-primary); margin-bottom:4px;">Воздушное пространство чисто</div>
+              <div style="font-size:12px;">Активных угроз и тревог в данный момент не зафиксировано</div>
+            </div>
+          `;
+          return;
+        }
+
+        incidents.forEach((inc) => {
+          const isRocket = inc.kind === 'rocket';
+          const item = document.createElement('div');
+          item.className = 'feed-segment-item';
+          const regionTitle = (inc.city || inc.region || 'Сектор РФ').replace(/[\u{1F300}-\u{1FAFF}]/gu, '');
+
+          item.innerHTML = `
+            <div class="feed-item-icon ${isRocket ? 'rocket-tone' : 'drone-tone'}">
+              <svg width="18" height="18"><use href="${isRocket ? '#custom-icon-rocket' : '#custom-icon-drone'}"></use></svg>
+            </div>
+            <div class="feed-item-content">
+              <div class="feed-item-header">
+                <span class="feed-item-region">${regionTitle}</span>
+                <span class="feed-item-time">${inc.time || 'Оперативно'}</span>
+              </div>
+              <div class="feed-item-desc">${sanitizeAndFormatText(inc.text || '')}</div>
+            </div>
+          `;
+
+          item.addEventListener('click', () => {
+            showIncidentDetails(inc);
+            const coords = inc.coords || resolveCoords(inc.city) || resolveCoords(inc.region);
+            if (coords) {
+              map.flyTo(coords, 7, { duration: 1.0 });
+            }
+            closeFeedModal();
+            if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
+          });
+
+          listEl.appendChild(item);
+        });
+      }
+
+      // Управление 3D модальным окном всех сводок
+      const feedModalBackdrop = document.getElementById('feedModalBackdrop');
+      const openFeedModalBtn = document.getElementById('openFeedModalBtn');
+      const feedModalCloseBtn = document.getElementById('feedModalCloseBtn');
+
+      function openFeedModal() {
+        if (!feedModalBackdrop) return;
+        document.body.classList.add('modal-open');
+        feedModalBackdrop.classList.add('is-open');
+        feedModalBackdrop.setAttribute('aria-hidden', 'false');
+        if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+      }
+
+      function closeFeedModal() {
+        if (!feedModalBackdrop) return;
+        document.body.classList.remove('modal-open');
+        feedModalBackdrop.classList.remove('is-open');
+        feedModalBackdrop.setAttribute('aria-hidden', 'true');
+      }
+
+      openFeedModalBtn?.addEventListener('click', openFeedModal);
+      feedModalCloseBtn?.addEventListener('click', closeFeedModal);
+      feedModalBackdrop?.addEventListener('click', (e) => {
+        if (e.target === feedModalBackdrop) closeFeedModal();
+      });
+
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && feedModalBackdrop?.classList.contains('is-open')) {
+          closeFeedModal();
+        }
+      });
+
+      function renderRegionClearState(regionName) {
+        const card = document.getElementById('activeIncidentCard');
+        const dot = document.getElementById('cardStatusDot');
+        const typeSvg = document.getElementById('cardTypeSvg');
+        const headline = document.getElementById('cardHeadline');
+        const sub = document.getElementById('cardSub');
+        const body = document.getElementById('cardBody');
+        const threatBadge = document.getElementById('cardThreatCount');
+
+        if (card) card.className = 'incident-card js-glare-target';
+        if (dot) dot.className = 'card-status-dot status-green';
+        if (typeSvg) typeSvg.innerHTML = '<use href="#custom-icon-shield"></use>';
+        if (headline) headline.textContent = `Сектор спокоен · ${regionName}`;
+        if (sub) sub.textContent = 'Мониторинг эфира и региональных источников';
+        if (body) body.textContent = `В регионе «${regionName}» активных угроз, сигналов тревоги и подтверждённых атак БПЛА не зафиксировано.`;
+        if (threatBadge) {
+          threatBadge.textContent = 'УГРОЗ: 0';
+          threatBadge.style.color = 'var(--status-online-text)';
+        }
+      }
+
+      // Переключение чипов регионов
+      document.querySelectorAll('.chip').forEach((chip) => {
+        chip.addEventListener('click', () => {
+          document.querySelectorAll('.chip').forEach((c) => c.classList.remove('active'));
+          chip.classList.add('active');
+
+          if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
+
+          const reg = chip.getAttribute('data-region');
+          if (reg === 'all') {
+            map.flyTo([53.6, 42.2], 5, { duration: 1.1 });
+            const incidents = latestData?.incidents || [];
+            const activeIncidents = incidents.filter((i) => i.kind !== 'clear');
+            if (activeIncidents.length > 0) {
+              showIncidentDetails(activeIncidents[0]);
+            } else {
+              renderEmptyState();
+            }
+          } else {
+            const coords = resolveCoords(reg);
+            if (coords) {
+              map.flyTo(coords, 7, { duration: 1.1 });
+            }
+            const incidents = latestData?.incidents || [];
+            const regLower = reg.toLowerCase();
+            const found = incidents.find(
+              (i) =>
+                i.kind !== 'clear' &&
+                ((i.region && i.region.toLowerCase().includes(regLower)) ||
+                 (i.city && i.city.toLowerCase().includes(regLower)) ||
+                 (i.text && i.text.toLowerCase().includes(regLower)))
+            );
+            if (found) {
+              showIncidentDetails(found);
+            } else {
+              renderRegionClearState(reg);
+            }
+          }
+        });
+      });
+
+      // Кнопка звука (с кастомными SVG вместо эмодзи)
+      const soundBtn = document.getElementById('soundToggle');
+      const soundIcon = document.getElementById('soundIcon');
+      if (soundBtn && soundIcon) {
+        soundBtn.addEventListener('click', () => {
+          isAudioEnabled = !isAudioEnabled;
+          soundIcon.innerHTML = isAudioEnabled ? SVG_SOUND_ON : SVG_SOUND_OFF;
+          soundBtn.classList.toggle('is-active', isAudioEnabled);
+          if (isAudioEnabled) playRadarPing();
+          showToast(isAudioEnabled ? 'Звуковой маяк включен' : 'Звуковой маяк отключен');
+          if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+        });
+      }
+
+      // Кнопка обновления
+      document.getElementById('refreshBtn')?.addEventListener('click', () => {
+        fetchRadarData(true);
+      });
+
+      // Часы МСК
+      function updateClock() {
+        const el = document.getElementById('timeClock');
+        if (!el) return;
+        const now = new Date();
+        el.textContent = now.toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow' });
+      }
+      setInterval(updateClock, 1000);
+      updateClock();
+
+      // =======================================================================
+      // YDS 2.1 SPECULAR GLARE TRACKER (КАК В INDEX.HTML)
+      // =======================================================================
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+      function updateGlare(clientX, clientY) {
+        if (prefersReducedMotion.matches) return;
+        const targets = document.querySelectorAll('.js-glare-target');
+        targets.forEach((el) => {
+          const rect = el.getBoundingClientRect();
+          const pad = 70;
+          const isNear =
+            clientX >= rect.left - pad &&
+            clientX <= rect.right + pad &&
+            clientY >= rect.top - pad &&
+            clientY <= rect.bottom + pad;
+
+          if (isNear) {
+            const x = clientX - rect.left;
+            const y = clientY - rect.top;
+            el.style.setProperty('--mouse-x', `${x.toFixed(1)}px`);
+            el.style.setProperty('--mouse-y', `${y.toFixed(1)}px`);
+            el.style.setProperty('--glare-opacity', '1');
+          } else {
+            el.style.setProperty('--glare-opacity', '0');
+          }
+        });
+      }
+
+      function clearGlare() {
+        document.querySelectorAll('.js-glare-target').forEach((el) => {
+          el.style.setProperty('--glare-opacity', '0');
+        });
+      }
+
+      let glareTicking = false;
+      function requestGlareUpdate(clientX, clientY) {
+        if (glareTicking || prefersReducedMotion.matches) return;
+        glareTicking = true;
+        requestAnimationFrame(() => {
+          updateGlare(clientX, clientY);
+          glareTicking = false;
+        });
+      }
+
+      window.addEventListener('mousemove', (e) => requestGlareUpdate(e.clientX, e.clientY), { passive: true });
+      window.addEventListener('touchstart', (e) => {
+        if (e.touches.length > 0) requestGlareUpdate(e.touches[0].clientX, e.touches[0].clientY);
+      }, { passive: true });
+      window.addEventListener('touchmove', (e) => {
+        if (e.touches.length > 0) requestGlareUpdate(e.touches[0].clientX, e.touches[0].clientY);
+      }, { passive: true });
+      window.addEventListener('touchend', clearGlare, { passive: true });
+      document.addEventListener('mouseleave', clearGlare, { passive: true });
+
+      // Предотвращение паразитного перетаскивания карты Leaflet при касании интерфейса
+      if (window.L && L.DomEvent) {
+        [
+          document.querySelector('.hud-header'),
+          document.querySelector('.map-side-stack'),
+          document.querySelector('.bottom-shelf'),
+          document.getElementById('feedModalBackdrop')
+        ].forEach((el) => {
+          if (el) {
+            L.DomEvent.disableClickPropagation(el);
+            L.DomEvent.disableScrollPropagation(el);
+          }
+        });
+      }
+
+      // Пересчёт размеров Leaflet карты при изменении окна или WebApp viewport
+      window.addEventListener('resize', () => {
+        map.invalidateSize();
+      });
+      if (tg?.onEvent) {
+        tg.onEvent('viewportChanged', () => {
+          map.invalidateSize();
+        });
+      }
+
+      // Мгновенный показ предзагруженных данных без задержки сети
+      if (window.__EMBEDDED_INITIAL_DATA__) {
+        latestData = window.__EMBEDDED_INITIAL_DATA__;
+        renderData(latestData);
+      }
+
+      // Запуск периодического обновления по сети
+      fetchRadarData(false);
+      setInterval(() => fetchRadarData(false), 30000);
+    })();
+  </script>
 </body>
 </html>
