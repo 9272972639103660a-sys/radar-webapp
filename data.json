@@ -1,12 +1,22 @@
 {
-  "updated_at": "2026-11-02T16:52:10.108965+00:00",
+  "updated_at": "2026-11-02T16:53:31.112336+00:00",
   "status": "alert",
   "summary": {
-    "total_threats": 1,
-    "drone_count": 0,
+    "total_threats": 2,
+    "drone_count": 1,
     "rocket_count": 1
   },
   "incidents": [
+    {
+      "id": "a616567f1ab26af0a64212f5d7839acdc976eb17840933c54380cf085da892dd",
+      "kind": "drone",
+      "active": true,
+      "region": "Краснодарский край",
+      "city": "Красноярский край",
+      "time": "02.11.2026 19:51",
+      "timestamp": "2026-11-02T16:51:08+00:00",
+      "text": "Краснодарский край Республика Адыгея Опасность по БПЛА ❗️"
+    },
     {
       "id": "0cade40225898e8d695494e64fd9c6a835d8c4aefec040ae561f7d8a9d97af32",
       "kind": "rocket",
