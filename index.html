@@ -590,6 +590,102 @@
     }
 
     /* Верхний сегмент стека: Сводка угроз и кнопка открытия полного журнала */
+    
+    /* Clickable Metric Pill Buttons */
+    .metric-pill-btn {
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      padding: 5px 8px;
+      border-radius: 9px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12.5px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      font-family: inherit;
+      outline: none;
+      transition: background-color 0.18s ease, transform 0.15s var(--spring-easing), color 0.18s ease;
+    }
+
+    .metric-pill-btn svg {
+      width: 15px;
+      height: 15px;
+      color: var(--text-primary);
+    }
+
+    .metric-pill-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-primary);
+    }
+
+    .metric-pill-btn:active {
+      transform: scale(0.93);
+      background: rgba(255, 255, 255, 0.14);
+    }
+
+    /* Modal Filter Tabs */
+    .modal-filter-tabs {
+      display: flex;
+      gap: 4px;
+      background: rgba(255, 255, 255, 0.04);
+      padding: 3px;
+      border-radius: 12px;
+      border: 0.5px solid rgba(255, 255, 255, 0.08);
+      margin-bottom: 12px;
+      flex-shrink: 0;
+    }
+
+    .modal-tab-btn {
+      flex: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 7px 10px;
+      border-radius: 9px;
+      background: transparent;
+      border: none;
+      color: var(--text-secondary);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      outline: none;
+      transition: background-color 0.18s ease, color 0.18s ease, transform 0.14s var(--spring-easing);
+    }
+
+    .modal-tab-btn svg {
+      width: 13px;
+      height: 13px;
+    }
+
+    .modal-tab-btn:hover {
+      color: var(--text-primary);
+    }
+
+    .modal-tab-btn.active {
+      background: rgba(255, 255, 255, 0.12);
+      color: #ffffff;
+      font-weight: 600;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+    }
+
+    .tab-badge {
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text-secondary);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .modal-tab-btn.active .tab-badge {
+      background: rgba(255, 255, 255, 0.22);
+      color: #ffffff;
+    }
+
     .stack-summary-segment {
       width: 100%;
       padding: 12px 16px;
@@ -1419,29 +1515,29 @@
 
       <!-- YDS 2.1 Двухсегментный стек (1.5px зазор) -->
       <div class="yds-segmented-stack">
-        <!-- Верхний сегмент: статистика БПЛА / Ракеты и открытие модального журнала -->
-        <button type="button" class="stack-summary-segment js-glare-target" id="openFeedModalBtn" aria-haspopup="dialog">
+        <!-- Верхний сегмент: статистика БПЛА / Ракеты с раздельным открытием списков -->
+        <div class="stack-summary-segment js-glare-target">
           <div class="summary-metrics">
-            <span class="metric-pill">
+            <button type="button" class="metric-pill-btn" id="filterDroneBtn" title="Сводки по БПЛА" aria-label="Сводки по БПЛА">
               <svg><use href="#custom-icon-drone"></use></svg>
               <span>БПЛА:</span>
               <span class="metric-val" id="statDroneCount">0</span>
-            </span>
-            <span class="metric-pill">
+            </button>
+            <button type="button" class="metric-pill-btn" id="filterRocketBtn" title="Ракетная опасность" aria-label="Ракетная опасность">
               <svg><use href="#custom-icon-rocket"></use></svg>
               <span>Ракеты:</span>
               <span class="metric-val" id="statRocketCount">0</span>
-            </span>
+            </button>
           </div>
 
-          <div class="summary-action-right">
-            <span id="openFeedLabel">Журнал сводок</span>
+          <button type="button" class="summary-action-right" id="openFeedModalBtn" title="Общий журнал сводок" aria-label="Общий журнал сводок">
+            <span id="openFeedLabel">Журнал</span>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
               <path d="M7 17L17 7"></path>
               <path d="M7 7h10v10"></path>
             </svg>
-          </div>
-        </button>
+          </button>
+        </div>
 
         <!-- Нижний сегмент: карточка активного инцидента -->
         <div class="incident-card js-glare-target" id="activeIncidentCard">
@@ -1505,6 +1601,24 @@
             <line x1="18" y1="6" x2="6" y2="18"></line>
             <line x1="6" y1="6" x2="18" y2="18"></line>
           </svg>
+        </button>
+      </div>
+
+      <!-- Фильтр-табы внутри модального окна -->
+      <div class="modal-filter-tabs">
+        <button type="button" class="modal-tab-btn active" data-filter="all" id="tabFilterAll">
+          <span>Все</span>
+          <span class="tab-badge" id="tabCountAll">0</span>
+        </button>
+        <button type="button" class="modal-tab-btn" data-filter="drone" id="tabFilterDrone">
+          <svg><use href="#custom-icon-drone"></use></svg>
+          <span>БПЛА</span>
+          <span class="tab-badge" id="tabCountDrone">0</span>
+        </button>
+        <button type="button" class="modal-tab-btn" data-filter="rocket" id="tabFilterRocket">
+          <svg><use href="#custom-icon-rocket"></use></svg>
+          <span>Ракеты</span>
+          <span class="tab-badge" id="tabCountRocket">0</span>
         </button>
       </div>
 
@@ -1964,17 +2078,7 @@ window.__EMBEDDED_INITIAL_DATA__ = {
           }).addTo(vectorRadarGroup);
         }
 
-        [350000, 750000, 1200000].forEach((radius) => {
-          L.circle([54.0, 41.0], {
-            radius: radius,
-            color: '#ffffff',
-            weight: 0.6,
-            opacity: 0.11,
-            fill: false,
-            dashArray: '3 6',
-            interactive: false
-          }).addTo(vectorRadarGroup);
-        });
+        // Concentric circles removed per user request
 
         const russiaSectorPolygon = [
           [60.0, 29.5], [64.5, 34.0], [66.5, 42.0], [64.0, 56.0],
@@ -2214,7 +2318,7 @@ window.__EMBEDDED_INITIAL_DATA__ = {
           renderEmptyState();
         }
 
-        renderFeedModalList(activeIncidents);
+        renderFilteredFeedList();
 
         const cardTimer = document.getElementById('cardLastUpdate');
         if (cardTimer && data.updated_at) {
@@ -2284,17 +2388,27 @@ window.__EMBEDDED_INITIAL_DATA__ = {
       }
 
       // Рендер списка в 3D модальном окне журнала
-      function renderFeedModalList(incidents) {
+      function renderFeedModalList(incidents, filterType = 'all') {
         const listEl = document.getElementById('incidentFeedList');
         if (!listEl) return;
 
         listEl.innerHTML = '';
         if (!incidents || incidents.length === 0) {
+          let emptyTitle = 'Воздушное пространство чисто';
+          let emptySub = 'Активных угроз и тревог в данный момент не зафиксировано';
+          if (filterType === 'drone') {
+            emptyTitle = 'Угроз БПЛА не зафиксировано';
+            emptySub = 'В выбранном типе целей обстановка спокойная';
+          } else if (filterType === 'rocket') {
+            emptyTitle = 'Ракетной опасности нет';
+            emptySub = 'Сигналов о ракетных угрозах не поступало';
+          }
+
           listEl.innerHTML = `
             <div style="text-align:center; padding:36px 16px; color:var(--text-tertiary);">
               <svg width="34" height="34" style="margin-bottom:10px; color:var(--status-online-text);"><use href="#custom-icon-shield"></use></svg>
-              <div style="font-size:14px; font-weight:600; color:var(--text-primary); margin-bottom:4px;">Воздушное пространство чисто</div>
-              <div style="font-size:12px;">Активных угроз и тревог в данный момент не зафиксировано</div>
+              <div style="font-size:14px; font-weight:600; color:var(--text-primary); margin-bottom:4px;">${emptyTitle}</div>
+              <div style="font-size:12px;">${emptySub}</div>
             </div>
           `;
           return;
@@ -2333,13 +2447,69 @@ window.__EMBEDDED_INITIAL_DATA__ = {
         });
       }
 
-      // Управление 3D модальным окном всех сводок
+      // Управление 3D модальным окном и фильтрацией (Все / БПЛА / Ракеты)
       const feedModalBackdrop = document.getElementById('feedModalBackdrop');
       const openFeedModalBtn = document.getElementById('openFeedModalBtn');
+      const filterDroneBtn = document.getElementById('filterDroneBtn');
+      const filterRocketBtn = document.getElementById('filterRocketBtn');
       const feedModalCloseBtn = document.getElementById('feedModalCloseBtn');
 
-      function openFeedModal() {
+      let currentFeedFilter = 'all';
+
+      function setModalFilter(filterType) {
+        currentFeedFilter = filterType;
+
+        // Переключаем активную вкладку
+        document.querySelectorAll('.modal-tab-btn').forEach((btn) => {
+          btn.classList.toggle('active', btn.getAttribute('data-filter') === filterType);
+        });
+
+        // Обновляем заголовки окна
+        const titleEl = document.getElementById('feedModalTitle');
+        const subEl = document.getElementById('feedModalSubtitle');
+        if (filterType === 'drone') {
+          if (titleEl) titleEl.textContent = 'Сводки по БПЛА';
+          if (subEl) subEl.textContent = 'Опасность и перехваты беспилотной авиации';
+        } else if (filterType === 'rocket') {
+          if (titleEl) titleEl.textContent = 'Ракетная опасность';
+          if (subEl) subEl.textContent = 'Оповещения о ракетных угрозах';
+        } else {
+          if (titleEl) titleEl.textContent = 'Журнал оперативных сводок';
+          if (subEl) subEl.textContent = 'Выберите сектор для фокусировки радара';
+        }
+
+        renderFilteredFeedList();
+      }
+
+      function renderFilteredFeedList() {
+        const incidents = latestData?.incidents || [];
+        const activeIncidents = incidents.filter((i) => i.kind !== 'clear');
+
+        // Бейджи счётчиков в табах
+        const droneCount = activeIncidents.filter((i) => i.kind === 'drone').length;
+        const rocketCount = activeIncidents.filter((i) => i.kind === 'rocket').length;
+
+        const countAll = document.getElementById('tabCountAll');
+        const countDrone = document.getElementById('tabCountDrone');
+        const countRocket = document.getElementById('tabCountRocket');
+
+        if (countAll) countAll.textContent = String(activeIncidents.length);
+        if (countDrone) countDrone.textContent = String(droneCount);
+        if (countRocket) countRocket.textContent = String(rocketCount);
+
+        let filtered = activeIncidents;
+        if (currentFeedFilter === 'drone') {
+          filtered = activeIncidents.filter((i) => i.kind === 'drone');
+        } else if (currentFeedFilter === 'rocket') {
+          filtered = activeIncidents.filter((i) => i.kind === 'rocket');
+        }
+
+        renderFeedModalList(filtered, currentFeedFilter);
+      }
+
+      function openFeedModal(filterType = 'all') {
         if (!feedModalBackdrop) return;
+        setModalFilter(filterType);
         document.body.classList.add('modal-open');
         feedModalBackdrop.classList.add('is-open');
         feedModalBackdrop.setAttribute('aria-hidden', 'false');
@@ -2351,9 +2521,38 @@ window.__EMBEDDED_INITIAL_DATA__ = {
         document.body.classList.remove('modal-open');
         feedModalBackdrop.classList.remove('is-open');
         feedModalBackdrop.setAttribute('aria-hidden', 'true');
+        setTimeout(() => {
+          map.invalidateSize();
+        }, 300);
       }
 
-      openFeedModalBtn?.addEventListener('click', openFeedModal);
+      // Клик по БПЛА открывает только список БПЛА
+      filterDroneBtn?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openFeedModal('drone');
+      });
+
+      // Клик по Ракетам открывает только список Ракет
+      filterRocketBtn?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openFeedModal('rocket');
+      });
+
+      // Клик по Журналу открывает общий список
+      openFeedModalBtn?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openFeedModal('all');
+      });
+
+      // Клик по табам внутри открытого модального окна
+      document.querySelectorAll('.modal-tab-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const filter = btn.getAttribute('data-filter') || 'all';
+          setModalFilter(filter);
+          if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
+        });
+      });
+
       feedModalCloseBtn?.addEventListener('click', closeFeedModal);
       feedModalBackdrop?.addEventListener('click', (e) => {
         if (e.target === feedModalBackdrop) closeFeedModal();
