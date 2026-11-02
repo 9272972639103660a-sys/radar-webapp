@@ -2245,42 +2245,7 @@ window.__EMBEDDED_INITIAL_DATA__ = {
 
       function buildMonochromeVectorRadar() {
         vectorRadarGroup.clearLayers();
-
-        for (let lat = 42; lat <= 66; lat += 4) {
-          L.polyline([[lat, 22], [lat, 64]], {
-            color: '#ffffff',
-            weight: 0.5,
-            opacity: 0.06,
-            interactive: false
-          }).addTo(vectorRadarGroup);
-        }
-        for (let lng = 26; lng <= 62; lng += 6) {
-          L.polyline([[42, lng], [66, lng]], {
-            color: '#ffffff',
-            weight: 0.5,
-            opacity: 0.06,
-            interactive: false
-          }).addTo(vectorRadarGroup);
-        }
-
-        // Concentric circles removed per user request
-
-        const russiaSectorPolygon = [
-          [60.0, 29.5], [64.5, 34.0], [66.5, 42.0], [64.0, 56.0],
-          [58.0, 59.5], [51.5, 58.0], [50.5, 51.0], [46.5, 48.0],
-          [43.0, 47.5], [43.5, 39.8], [44.5, 33.5], [46.2, 33.0],
-          [47.2, 38.5], [50.4, 36.2], [52.1, 34.0], [54.8, 31.8],
-          [57.8, 28.2], [60.0, 29.5]
-        ];
-
-        L.polygon(russiaSectorPolygon, {
-          color: '#ffffff',
-          weight: 1,
-          opacity: 0.16,
-          fillColor: '#ffffff',
-          fillOpacity: 0.02,
-          interactive: false
-        }).addTo(vectorRadarGroup);
+        // Искусственные сетки и рамка сектора удалены для чистой карты
       }
 
       buildMonochromeVectorRadar();
