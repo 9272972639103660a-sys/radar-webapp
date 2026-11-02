@@ -183,8 +183,14 @@ async function fetchRadarData() {
     latestData = data;
     renderData(data);
   } catch (err) {
-    console.log("Данные радара недоступны, отображаем дефолтное состояние:", err);
-    renderEmptyState();
+    if (window.__EMBEDDED_INITIAL_DATA__) {
+      console.log("Используем встроенные резервные данные:", err);
+      latestData = window.__EMBEDDED_INITIAL_DATA__;
+      renderData(latestData);
+    } else {
+      console.log("Данные радара недоступны, отображаем дефолтное состояние:", err);
+      renderEmptyState();
+    }
   } finally {
     setTimeout(() => {
       if (refreshBtn) refreshBtn.style.transform = 'none';
